@@ -1,0 +1,20 @@
+services:
+  postgres:
+    image: postgres:17-alpine
+    container_name: accessflow-pg
+    environment:
+      - POSTGRES_USER=accessflow
+      - POSTGRES_PASSWORD=accessflow
+      - POSTGRES_DB=accessflow
+    ports:
+      - 5433:5432
+    volumes:
+      - accessflow_pg_data:/var/lib/postgresql/data
+    healthcheck:
+      test: ['CMD-SHELL', 'pg_isready -U accessflow -d accessflow']
+      interval: 5s
+      timeout: 5s
+      retries: 10
+
+volumes:
+  accessflow_pg_data:
