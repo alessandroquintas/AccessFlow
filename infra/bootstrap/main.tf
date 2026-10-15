@@ -1,11 +1,11 @@
 terraform {
-  required_version = ">= 1.10"
+  required_version = "~> 1.15"
 
   # O state do bootstrap fica no próprio bucket que ele cria. No primeiro
-  # apply este bloco não existia; foi adicionado depois e migrado com
-  # `terraform init -migrate-state`.
+  # apply este bloco não existia; o state foi migrado depois com
+  # `terraform init -migrate-state -backend-config=backend.hcl`.
+  # O nome do bucket vem do backend.hcl (fora do Git).
   backend "s3" {
-    bucket       = "accessflow-tfstate-471112803303"
     key          = "bootstrap/terraform.tfstate"
     region       = "us-east-1"
     encrypt      = true
