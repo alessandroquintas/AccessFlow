@@ -1,7 +1,20 @@
 import swc from 'unplugin-swc';
+import { existsSync, readFileSync } from 'node:fs';
 import { fileURLToPath } from 'node:url';
 import { defineConfig } from 'vitest/config';
-import { loadTestEnv } from './test/integration/setup/test-env.js';
+import { parse } from 'dotenv';
+
+function loadTestEnv(): Record<string, string> {
+  if (!existsSync('.env.test')) return {};
+  const env = parse(readFileSync('.env.test'));
+
+  if (env.DATABASE_URL && !env.DATABASE_URL.includes('_test')) {
+    throw new Error(
+      'DATABASE_URL de teste precisa apontar para um banco *_test.',
+    );
+  }
+  return env;
+}
 
 export default defineConfig({
   resolve: {
