@@ -12,7 +12,7 @@ import { DomainErrorFilter } from './shared/presentation/graphql/domain-error.fi
   imports: [
     GraphQLModule.forRoot<ApolloDriverConfig>({
       driver: ApolloDriver,
-      autoSchemaFile: join(process.cwd(), 'src/schema.gql'),
+      autoSchemaFile: join(process.cwd(), 'src/graphql/schema.gql'),
       sortSchema: true,
       context: ({ req }: { req: unknown }) => ({ req }),
       includeStacktraceInErrorResponses: false,
