@@ -5,7 +5,13 @@ import { validateEnv } from './env.validation';
 
 @Global()
 @Module({
-  imports: [ConfigModule.forRoot({ validate: validateEnv })],
+  imports: [
+    ConfigModule.forRoot({
+      isGlobal: true,
+      validate: validateEnv,
+      ignoreEnvFile: process.env.NODE_ENV === 'test',
+    }),
+  ],
   providers: [EnvService],
   exports: [EnvService],
 })

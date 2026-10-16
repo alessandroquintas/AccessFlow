@@ -45,5 +45,6 @@ export default defineConfig({
         },
       },
     ],
+    include: ['test/integration/**/*.spec.ts', 'test/e2e/**/*.e2e.spec.ts'],
   },
 });
