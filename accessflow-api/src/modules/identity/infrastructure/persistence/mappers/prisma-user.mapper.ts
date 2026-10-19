@@ -17,6 +17,18 @@ export class PrismaUserMapper {
     });
   }
 
+  static toPersistence(user: User) {
+    return {
+      id: user.id,
+      cognitoSub: user.cognitoSub,
+      name: user.name,
+      email: user.email,
+      status: user.status,
+      createdAt: user.createdAt,
+      updatedAt: user.updatedAt,
+    };
+  }
+
   private static toDomainStatus(status: PrismaUser['status']): UserStatus {
     switch (status) {
       case 'ACTIVE':
