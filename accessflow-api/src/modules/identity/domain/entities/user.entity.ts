@@ -1,9 +1,12 @@
+import { randomUUID } from 'node:crypto';
 import { InvalidUserError } from '../errors/invalid-user.error';
+import { Email } from '../value-objects/email.vo';
+import { UserName } from '../value-objects/user-name.vo';
 
 export const UserStatus = {
   ACTIVE: 'ACTIVE',
   INACTIVE: 'INACTIVE',
-};
+} as const;
 
 export type UserStatus = (typeof UserStatus)[keyof typeof UserStatus];
 
@@ -12,29 +15,43 @@ export interface UserProps {
   cognitoSub: string;
   name: string;
   email: string;
-  status: string;
+  status: UserStatus;
   createdAt: Date;
   updatedAt: Date;
 }
 
+interface UserState extends Omit<UserProps, 'name' | 'email'> {
+  name: UserName;
+  email: Email;
+}
 export class User {
-  private constructor(private readonly props: UserProps) {}
+  private constructor(private readonly props: UserState) {}
+
+  static create(
+    input: { cognitoSub: string; name: string; email: string },
+    now: Date = new Date(),
+  ): User {
+    return User.restore({
+      id: randomUUID(),
+      cognitoSub: input.cognitoSub,
+      name: input.name,
+      email: input.email,
+      status: UserStatus.ACTIVE,
+      createdAt: now,
+      updatedAt: now,
+    });
+  }
 
   static restore(props: UserProps): User {
-    if (!props.id.trim()) {
-      throw new InvalidUserError('id é obrigatório');
-    }
-    if (!props.name.trim()) {
-      throw new InvalidUserError('name é obrigatório');
-    }
-    if (!props.cognitoSub.trim()) {
-      throw new InvalidUserError('cognitoSub é obrigatório');
-    }
-    if (!props.email.trim()) {
-      throw new InvalidUserError('email é obrigatório');
-    }
+    if (!props.id?.trim()) throw new InvalidUserError('id é obrigatório.');
+    if (!props.cognitoSub?.trim())
+      throw new InvalidUserError('cognitoSub é obrigatório.');
 
-    return new User({ ...props });
+    return new User({
+      ...props,
+      name: UserName.create(props.name),
+      email: Email.create(props.email),
+    });
   }
 
   get id(): string {
@@ -46,11 +63,11 @@ export class User {
   }
 
   get name(): string {
-    return this.props.name;
+    return this.props.name.value;
   }
 
   get email(): string {
-    return this.props.email;
+    return this.props.email.value;
   }
 
   get status(): UserStatus {
