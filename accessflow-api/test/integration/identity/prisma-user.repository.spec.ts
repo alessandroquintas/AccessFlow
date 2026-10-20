@@ -5,6 +5,7 @@ import {
   User,
   UserStatus,
 } from '@/modules/identity/domain/entities/user.entity';
+import { UserAlreadyExistsError } from '@/modules/identity/domain/errors/user-already-exists.error';
 
 let prisma: PrismaService;
 let sut: PrismaUserRepository;
@@ -67,5 +68,39 @@ describe('PrismaUserRepository (integração)', () => {
 
     expect(user?.status).toBe(UserStatus.INACTIVE);
     expect(user?.isActive()).toBe(false);
+  });
+
+  it('persiste um usuário criado pelo domínio', async () => {
+    const user = User.create({
+      cognitoSub: 'sub-nova',
+      name: 'Nova',
+      email: 'nova@example.com',
+    });
+
+    await sut.create(user);
+
+    const found = await sut.findByCognitoSub('sub-nova');
+    expect(found?.id).toBe(user.id);
+    expect(found?.email).toBe('nova@example.com');
+  });
+
+  it('lança UserAlreadyExistsError para cognitoSub duplicado', async () => {
+    await sut.create(
+      User.create({
+        cognitoSub: 'sub-dup',
+        name: 'Primeira',
+        email: 'a@example.com',
+      }),
+    );
+
+    await expect(
+      sut.create(
+        User.create({
+          cognitoSub: 'sub-dup',
+          name: 'Segunda',
+          email: 'b@example.com',
+        }),
+      ),
+    ).rejects.toBeInstanceOf(UserAlreadyExistsError);
   });
 });

@@ -38,13 +38,15 @@ export default defineConfig({
         extends: true,
         test: {
           name: 'integration',
-          include: ['test/integration/**/*.spec.ts'],
+          include: [
+            'test/integration/**/*.spec.ts',
+            'test/e2e/**/*.e2e.spec.ts',
+          ],
           globalSetup: ['test/integration/setup/global-setup.ts'],
           env: loadTestEnv(),
           fileParallelism: false,
         },
       },
     ],
-    include: ['test/integration/**/*.spec.ts', 'test/e2e/**/*.e2e.spec.ts'],
   },
 });

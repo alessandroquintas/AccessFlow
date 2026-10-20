@@ -18,7 +18,7 @@ export class ProvisionUserUseCase {
     private readonly identityProfile: IdentityProfilePort,
   ) {}
 
-  async execute(input: ProvisionUserInput): Promise<any> {
+  async execute(input: ProvisionUserInput): Promise<User> {
     const existing = await this.users.findByCognitoSub(input.cognitoSub);
     if (existing) return this.ensureActive(existing);
 
@@ -56,7 +56,7 @@ export class ProvisionUserUseCase {
   }
 
   private ensureActive(user: User): User {
-    if (!user.isActive) {
+    if (!user.isActive()) {
       throw new UserInactiveError();
     }
 

@@ -9,6 +9,7 @@ import type { Request } from 'express';
 
 export type AuthenticatedRequest = Request & {
   identity?: AuthenticatedIdentity;
+  accessToken?: string;
 };
 
 function extractBearerToken(header: string | undefined): string | null {
@@ -34,6 +35,7 @@ export class JwtAuthGuard implements CanActivate {
     if (!token) throw new InvalidAccessTokenError();
 
     request.identity = await this.tokenVerifier.verify(token);
+    request.accessToken = token;
     return true;
   }
 }

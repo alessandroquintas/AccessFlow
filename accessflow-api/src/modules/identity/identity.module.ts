@@ -8,6 +8,11 @@ import { GetCurrentUserUseCase } from './application/use-cases/get-current-user.
 import { JwtAuthGuard } from './presentation/graphql/guards/jwt-auth.guard';
 import { IdentityResolver } from './presentation/graphql/resolvers/identity.resolver';
 import { CognitoTokenVerifier } from './infrastructure/cognito/cognito-token.verifier';
+import { IdentityProfilePort } from './application/ports/identity-profile.port';
+import { ConfigService } from '@nestjs/config';
+import { Env } from '@/config/env.schema';
+import { CognitoIdentityProfileProvider } from './infrastructure/cognito/cognito-identity-profile.provider';
+import { ProvisionUserUseCase } from './application/use-cases/provision-user.use.case';
 
 @Module({
   imports: [PrismaModule],
@@ -26,6 +31,20 @@ import { CognitoTokenVerifier } from './infrastructure/cognito/cognito-token.ver
       provide: GetCurrentUserUseCase,
       inject: [UserRepository],
       useFactory: (users: UserRepository) => new GetCurrentUserUseCase(users),
+    },
+    {
+      provide: IdentityProfilePort,
+      inject: [ConfigService],
+      useFactory: (config: ConfigService<Env, true>) =>
+        CognitoIdentityProfileProvider.fromUserPoolId(
+          config.get('COGNITO_USER_POOL_ID', { infer: true }),
+        ),
+    },
+    {
+      provide: ProvisionUserUseCase,
+      inject: [UserRepository, IdentityProfilePort],
+      useFactory: (users: UserRepository, profile: IdentityProfilePort) =>
+        new ProvisionUserUseCase(users, profile),
     },
     JwtAuthGuard,
     IdentityResolver,

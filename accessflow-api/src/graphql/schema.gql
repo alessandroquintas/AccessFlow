@@ -7,6 +7,18 @@ A date-time string at UTC, such as 2019-12-03T09:54:33Z, compliant with the date
 """
 scalar DateTime
 
+type Mutation {
+  """
+  Cria o perfil local do usuário autenticado. Se já existir, devolve o existente
+  """
+  provisionMe(input: ProvisionMeInput!): User!
+}
+
+input ProvisionMeInput {
+  """Nome de exibição (2 a 100 caracteres)."""
+  name: String!
+}
+
 type Query {
   """Perfil do usuário autenticado."""
   me: User!
