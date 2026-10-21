@@ -86,7 +86,6 @@ describe('Mutation provisionMe (e2e)', () => {
       ),
     );
 
-    // eslint-disable-next-line @typescript-eslint/no-unsafe-return
     const ids = new Set(results.map((res) => res.body.data.provisionMe.id));
     expect(ids.size).toBe(1);
     expect(await prisma.user.count()).toBe(1);

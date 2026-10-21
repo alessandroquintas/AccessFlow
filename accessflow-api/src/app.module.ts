@@ -7,6 +7,7 @@ import { formatGraphqlError } from './shared/presentation/graphql/format-graphql
 import { join } from 'node:path';
 import { APP_FILTER } from '@nestjs/core';
 import { DomainErrorFilter } from './shared/presentation/graphql/domain-error.filter';
+import { OrganizationsModule } from './modules/organizations/organizations.module';
 
 @Module({
   imports: [
@@ -20,6 +21,7 @@ import { DomainErrorFilter } from './shared/presentation/graphql/domain-error.fi
     }),
     EnvModule,
     IdentityModule,
+    OrganizationsModule,
   ],
   providers: [
     {

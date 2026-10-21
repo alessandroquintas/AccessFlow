@@ -9,12 +9,10 @@ export class InMemoryUserRepository extends UserRepository {
     this.items = [...users];
   }
 
-  // eslint-disable-next-line @typescript-eslint/require-await
   async findByCognitoSub(cognitoSub: string): Promise<User | null> {
     return this.items.find((user) => user.cognitoSub === cognitoSub) ?? null;
   }
 
-  // eslint-disable-next-line @typescript-eslint/require-await
   async create(user: User): Promise<void> {
     if (this.items.some((item) => item.cognitoSub === user.cognitoSub)) {
       throw new UserAlreadyExistsError();

@@ -21,7 +21,6 @@ export class FakeTokenVerifier extends TokenVerifierPort {
     this.unexpectedError = null;
   }
 
-  // eslint-disable-next-line @typescript-eslint/require-await
   async verify(token: string): Promise<AuthenticatedIdentity> {
     if (this.unexpectedError) {
       throw this.unexpectedError;

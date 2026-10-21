@@ -20,7 +20,6 @@ export class FakeIdentityProfileProvider extends IdentityProfilePort {
     this.calls = 0;
   }
 
-  // eslint-disable-next-line @typescript-eslint/require-await
   async getProfile(accessToken: string): Promise<IdentityProfile> {
     this.calls++;
     const profile = this.profiles.get(accessToken);

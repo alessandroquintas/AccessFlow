@@ -68,7 +68,7 @@ describe('CognitoTokenVerifier', () => {
   it('rejeita token assinado por outra chave', async () => {
     const attacker = await generateKeyPair('RS256');
     const token = await signToken({ signingKey: attacker.privateKey });
-    console.log('token:', { token });
+
     await expect(sut.verify(token)).rejects.toBeInstanceOf(
       InvalidAccessTokenError,
     );
