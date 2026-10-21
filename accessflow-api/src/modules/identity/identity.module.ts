@@ -49,5 +49,6 @@ import { ProvisionUserUseCase } from './application/use-cases/provision-user.use
     JwtAuthGuard,
     IdentityResolver,
   ],
+  exports: [GetCurrentUserUseCase, TokenVerifierPort, JwtAuthGuard],
 })
 export class IdentityModule {}

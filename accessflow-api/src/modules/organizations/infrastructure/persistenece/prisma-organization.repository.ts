@@ -31,6 +31,22 @@ export class PrismaOrganizationRepository extends OrganizationRepository {
     return record ? PrismaOrganizationMapper.toDomain(record) : null;
   }
 
+  async findByIds(ids: string[]): Promise<Organization[]> {
+    if (ids.length === 0) {
+      return [];
+    }
+
+    const records = await this.prisma.organization.findMany({
+      where: {
+        id: {
+          in: ids,
+        },
+      },
+    });
+
+    return records.map(PrismaOrganizationMapper.toDomain);
+  }
+
   async createWithOwner(
     organization: Organization,
     owner: Membership,
