@@ -11,6 +11,10 @@ const CREATE = `mutation Create($name: String!, $slug: String!) {
 const MY_ORGANIZATIONS = '{ myOrganizations { id slug viewerRole } }';
 const ORGANIZATION = `query Org($id: ID!) { organization(organizationId: $id) { id slug viewerRole } }`;
 
+const UPDATE = `mutation Update($id: ID!, $name: String!) {
+  updateOrganization(organizationId: $id, input: { name: $name }) { id name viewerRole }
+}`;
+
 let app: INestApplication;
 let prisma: PrismaService;
 let tokens: FakeTokenVerifier;
@@ -227,6 +231,80 @@ describe('Organizations (e2e)', () => {
       expect(malformado.body.errors[0].extensions.reason).toBe(
         'ORGANIZATION_NOT_FOUND',
       );
+    });
+  });
+
+  describe('updateOrganization', () => {
+    async function setup() {
+      await createUser('ana');
+      const bruno = await createUser('bruno');
+      await createUser('carla');
+
+      const created = await graphql(
+        CREATE,
+        { name: 'Acme', slug: 'acme' },
+        'token-ana',
+      );
+      const id = created.body.data.createOrganization.id;
+
+      await prisma.membership.create({
+        data: { organizationId: id, userId: bruno.id, role: 'MEMBER' },
+      });
+
+      return id;
+    }
+
+    it('OWNER renomeia a organização', async () => {
+      const id = await setup();
+
+      const res = await graphql(
+        UPDATE,
+        { id, name: 'Acme Global' },
+        'token-ana',
+      );
+
+      expect(res.body.data.updateOrganization).toEqual({
+        id,
+        name: 'Acme Global',
+        viewerRole: 'OWNER',
+      });
+    });
+
+    it('MEMBER recebe FORBIDDEN e o nome não muda', async () => {
+      const id = await setup();
+
+      const res = await graphql(UPDATE, { id, name: 'Hack' }, 'token-bruno');
+
+      expect(res.body.errors[0].extensions).toEqual({
+        code: 'FORBIDDEN',
+        reason: 'ORGANIZATION_PERMISSION_DENIED',
+      });
+      const organization = await prisma.organization.findUnique({
+        where: { id },
+      });
+      expect(organization?.name).toBe('Acme');
+    });
+
+    it('não membro recebe NOT_FOUND', async () => {
+      const id = await setup();
+
+      const res = await graphql(UPDATE, { id, name: 'Hack' }, 'token-carla');
+
+      expect(res.body.errors[0].extensions).toEqual({
+        code: 'NOT_FOUND',
+        reason: 'ORGANIZATION_NOT_FOUND',
+      });
+    });
+
+    it('OWNER com nome inválido recebe BAD_REQUEST', async () => {
+      const id = await setup();
+
+      const res = await graphql(UPDATE, { id, name: 'A' }, 'token-ana');
+
+      expect(res.body.errors[0].extensions).toEqual({
+        code: 'BAD_REQUEST',
+        reason: 'INVALID_ORGANIZATION',
+      });
     });
   });
 });

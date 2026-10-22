@@ -28,6 +28,9 @@ type Mutation {
   Cria o perfil local do usuário autenticado. Se já existir, devolve o existente
   """
   provisionMe(input: ProvisionMeInput!): User!
+
+  """Atualiza os dados da organização. """
+  updateOrganization(input: UpdateOrganizationInput!, organizationId: ID!): Organization!
 }
 
 type Organization {
@@ -60,6 +63,11 @@ type Query {
 
   """Uma organização da qual o usuário autenticado é membro."""
   organization(organizationId: ID!): Organization!
+}
+
+input UpdateOrganizationInput {
+  """Novo nome de exibição (2 a 100 caracteres)."""
+  name: String!
 }
 
 type User {

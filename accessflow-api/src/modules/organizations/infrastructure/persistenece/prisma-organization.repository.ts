@@ -65,4 +65,16 @@ export class PrismaOrganizationRepository extends OrganizationRepository {
       throw error;
     }
   }
+
+  async save(organization: Organization): Promise<void> {
+    const { id, ...data } =
+      PrismaOrganizationMapper.toPersistence(organization);
+
+    await this.prisma.organization.update({
+      where: {
+        id,
+      },
+      data,
+    });
+  }
 }

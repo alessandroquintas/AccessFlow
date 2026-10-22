@@ -1,5 +1,9 @@
 import { randomUUID } from 'node:crypto';
 import { InvalidMembershipError } from '../errors/invalid-membership.error';
+import {
+  OrganizationPermission,
+  roleHasPermission,
+} from '../../policies/organization-permission';
 
 export const MembershipRole = {
   OWNER: 'OWNER',
@@ -114,5 +118,13 @@ export class Membership {
       status: MembershipStatus.REMOVED,
       updatedAt: now,
     };
+  }
+
+  can(permission: OrganizationPermission): boolean {
+    const role = this.props.role;
+
+    const hasCan = this.isActive() && roleHasPermission(role, permission);
+
+    return hasCan;
   }
 }

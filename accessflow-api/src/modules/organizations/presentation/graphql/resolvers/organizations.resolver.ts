@@ -9,6 +9,8 @@ import { GetOrganizationUseCase } from '@/modules/organizations/application/use-
 import { CreateOrganizationInput } from '../inputs/create-organization.input';
 import { OrganizationTypes } from '../types/organization.type';
 import { CreateOrganizationUseCase } from '@/modules/organizations/application/use-cases/create-organization.use.case';
+import { UpdateOrganizationUseCase } from '@/modules/organizations/application/use-cases/update-organization.use-case';
+import { UpdateOrganizationInput } from '../inputs/update-organization.input';
 
 @Resolver(() => OrganizationTypes)
 @UseGuards(JwtAuthGuard)
@@ -17,6 +19,7 @@ export class OrganizationsResolver {
     private readonly createOrganizationUseCase: CreateOrganizationUseCase,
     private readonly listMyOrganizationsUseCase: ListMyOrganizationsUseCase,
     private readonly getOrganizationUseCase: GetOrganizationUseCase,
+    private readonly updateOrganizationUseCase: UpdateOrganizationUseCase,
   ) {}
 
   @Mutation(() => OrganizationTypes, {
@@ -55,6 +58,23 @@ export class OrganizationsResolver {
       cognitoSub: identity.sub,
       organizationId,
     });
+    return OrganizationTypes.from(result);
+  }
+
+  @Mutation(() => OrganizationTypes, {
+    description: 'Atualiza os dados da organização. ',
+  })
+  async updateOrganization(
+    @CurrentIdentity() identity: AuthenticatedIdentity,
+    @Args('organizationId', { type: () => ID }) organizationId: string,
+    @Args('input') input: UpdateOrganizationInput,
+  ): Promise<OrganizationTypes> {
+    const result = await this.updateOrganizationUseCase.execute({
+      cognitoSub: identity.sub,
+      organizationId,
+      name: input.name,
+    });
+
     return OrganizationTypes.from(result);
   }
 }

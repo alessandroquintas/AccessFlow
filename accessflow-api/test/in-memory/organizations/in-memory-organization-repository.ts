@@ -28,4 +28,11 @@ export class InMemoryOrganizationRepository extends OrganizationRepository {
     this.items.push(organization);
     this.memberships.items.push(owner);
   }
+
+  async save(organization: Organization): Promise<void> {
+    const index = this.items.findIndex((o) => o.id === organization.id);
+    if (index >= 0) {
+      this.items[index] = organization;
+    }
+  }
 }

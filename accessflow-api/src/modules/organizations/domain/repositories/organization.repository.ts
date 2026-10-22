@@ -12,4 +12,6 @@ export abstract class OrganizationRepository {
     organization: Organization,
     owner: Membership,
   ): Promise<void>;
+
+  abstract save(organization: Organization): Promise<void>;
 }

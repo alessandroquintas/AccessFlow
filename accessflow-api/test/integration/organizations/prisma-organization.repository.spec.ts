@@ -141,4 +141,20 @@ describe('Repositórios de organizations (integração)', () => {
 
     expect(membership?.role).toBe(MembershipRole.OWNER);
   });
+
+  it('save persiste o novo nome', async () => {
+    const user = await createUser('sub-ana');
+    const organization = Organization.create({ name: 'Acme', slug: 'acme' });
+    await organizations.createWithOwner(
+      organization,
+      Membership.createOwner(organization.id, user.id),
+    );
+
+    organization.rename('Acme Global');
+    await organizations.save(organization);
+
+    expect((await organizations.findById(organization.id))?.name).toBe(
+      'Acme Global',
+    );
+  });
 });
