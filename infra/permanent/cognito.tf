@@ -90,3 +90,41 @@ resource "aws_cognito_user_pool_client" "dev_cli" {
     access_token = "minutes"
   }
 }
+
+# Resource server da API: define os escopos que clients de máquina podem pedir.
+resource "aws_cognito_resource_server" "api" {
+  identifier   = "accessflow-api"
+  name         = "AccessFlow API"
+  user_pool_id = aws_cognito_user_pool.main.id
+
+  scope {
+    scope_name        = "members.read"
+    scope_description = "Consultar se um usuário é membro de uma organização"
+  }
+}
+
+# Cliente de integração (máquina): client credentials, com secret e sem usuário.
+resource "aws_cognito_user_pool_client" "integration_demo" {
+  name         = "accessflow-integration-demo"
+  user_pool_id = aws_cognito_user_pool.main.id
+
+  generate_secret = true
+
+  allowed_oauth_flows_user_pool_client = true
+  allowed_oauth_flows                  = ["client_credentials"]
+  # Escopo explícito, e não scope_identifiers inteiro: um escopo novo no
+  # resource server não deve ser concedido a este client automaticamente.
+  allowed_oauth_scopes = ["${aws_cognito_resource_server.api.identifier}/members.read"]
+
+  # Sem esta lista o Cognito habilita SRP e CUSTOM_AUTH por padrão. O client
+  # credentials não emite refresh token, então o fluxo abaixo fica inerte.
+  explicit_auth_flows = ["ALLOW_REFRESH_TOKEN_AUTH"]
+
+  prevent_user_existence_errors = "ENABLED"
+  enable_token_revocation       = true
+  access_token_validity         = 60
+
+  token_validity_units {
+    access_token = "minutes"
+  }
+}

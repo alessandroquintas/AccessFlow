@@ -5,8 +5,18 @@ variable "aws_region" {
 }
 
 variable "domain_prefix" {
-  type    = string
-  default = "Prefixo do dominio do login hospedado (unico por região na AWS)."
+  description = "Prefixo do domínio do login hospedado (único por região na AWS)."
+  type        = string
+
+  validation {
+    condition     = can(regex("^[a-z0-9](?:[a-z0-9-]{0,61}[a-z0-9])?$", var.domain_prefix))
+    error_message = "Use só letras minúsculas, números e hífen (até 63 caracteres), sem hífen no início ou no fim."
+  }
+
+  validation {
+    condition     = !can(regex("aws|amazon|cognito", var.domain_prefix))
+    error_message = "O prefixo não pode conter 'aws', 'amazon' ou 'cognito'."
+  }
 }
 
 variable "web_callback_urls" {
