@@ -2,6 +2,8 @@ export interface MemberProfile {
   id: string;
   name: string;
   email: string;
+  /** Falso quando o perfil do usuário está INACTIVE. */
+  active: boolean;
 }
 
 export abstract class UserDirectoryPort {

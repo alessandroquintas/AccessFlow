@@ -19,13 +19,22 @@ import { ListOrganizationMembersUseCase } from './application/use-cases/list-org
 import { RemoveMemberUseCase } from './application/use-cases/remove-member.use-case';
 import { LeaveOrganizationUseCase } from './application/use-cases/leave-organization.use-case';
 import { MembersResolver } from './presentation/graphql/resolvers/members.resolver';
+import { IntegrationClientRepository } from './domain/repositories/integration-client.repository';
+import { PrismaIntegrationClientRepository } from './infrastructure/persistence/prisma-integration-client.repository';
+import { CheckMembershipForIntegrationUseCase } from './application/use-cases/check-membership-for-integration.use-case';
+import { IntegrationMembersController } from './presentation/http/controllers/integration-members.controller';
 
 @Module({
   imports: [PrismaModule, IdentityModule],
+  controllers: [IntegrationMembersController],
   providers: [
     // Persistência
     { provide: OrganizationRepository, useClass: PrismaOrganizationRepository },
     { provide: MembershipRepository, useClass: PrismaMembershipRepository },
+    {
+      provide: IntegrationClientRepository,
+      useClass: PrismaIntegrationClientRepository,
+    },
 
     // Adaptador para o módulo Identity
     {
@@ -124,6 +133,27 @@ import { MembersResolver } from './presentation/graphql/resolvers/members.resolv
         users: UserDirectoryPort,
         access: OrganizationAccessService,
       ) => new LeaveOrganizationUseCase(memberships, users, access),
+    },
+    {
+      provide: CheckMembershipForIntegrationUseCase,
+      inject: [
+        IntegrationClientRepository,
+        OrganizationRepository,
+        MembershipRepository,
+        UserDirectoryPort,
+      ],
+      useFactory: (
+        integrationClients: IntegrationClientRepository,
+        organizations: OrganizationRepository,
+        memberships: MembershipRepository,
+        users: UserDirectoryPort,
+      ) =>
+        new CheckMembershipForIntegrationUseCase(
+          integrationClients,
+          organizations,
+          memberships,
+          users,
+        ),
     },
 
     // Apresentação

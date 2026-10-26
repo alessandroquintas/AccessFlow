@@ -28,6 +28,7 @@ export class IdentityUserDirectory extends UserDirectoryPort {
       id: user.id,
       name: user.name,
       email: user.email,
+      active: user.isActive(),
     }));
   }
 }

@@ -48,6 +48,7 @@ const OUTPUT_BY_DOMAIN_CODE: Record<string, ErrorOutput> = {
   USER_ALREADY_EXISTS: CONFLICT,
   SLUG_ALREADY_TAKEN: CONFLICT,
   LAST_OWNER: CONFLICT,
+  INVALID_INTEGRATION_CLIENT: BAD_REQUEST,
 };
 
 function outputFor(error: DomainError): ErrorOutput {
