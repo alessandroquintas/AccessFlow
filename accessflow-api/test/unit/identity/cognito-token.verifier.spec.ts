@@ -1,4 +1,5 @@
-import { beforeAll, describe, expect, it } from 'vitest';
+import { beforeAll, describe, expect, it, vi } from 'vitest';
+import { Logger } from '@nestjs/common';
 import { exportJWK, generateKeyPair, SignJWT } from 'jose';
 import { CognitoTokenVerifier } from '@/modules/identity/infrastructure/cognito/cognito-token.verifier';
 import { InvalidAccessTokenError } from '@/modules/identity/application/errors/invalid-access-token.error';
@@ -104,6 +105,19 @@ describe('CognitoTokenVerifier', () => {
     await expect(sut.verify('nao-sou-um-jwt')).rejects.toBeInstanceOf(
       InvalidAccessTokenError,
     );
+  });
+
+  it('registra o motivo da recusa sem o token', async () => {
+    const warn = vi
+      .spyOn(Logger.prototype, 'warn')
+      .mockImplementation(() => undefined);
+    const token = await signToken({ clientId: 'client-nao-autorizado' });
+
+    await expect(sut.verify(token)).rejects.toThrow();
+
+    expect(warn).toHaveBeenCalledTimes(1);
+    expect(String(warn.mock.calls[0][0])).not.toContain(token);
+    warn.mockRestore();
   });
 
   it('não aceita allowlist de clients vazia', () => {

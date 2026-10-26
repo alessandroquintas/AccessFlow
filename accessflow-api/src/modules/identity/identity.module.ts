@@ -5,7 +5,7 @@ import { PrismaUserRepository } from './infrastructure/persistence/prisma-user.r
 import { TokenVerifierPort } from './application/ports/token-verifier.port';
 import { EnvService } from '@/config/env.service';
 import { GetCurrentUserUseCase } from './application/use-cases/get-current-user.use-case';
-import { JwtAuthGuard } from './presentation/graphql/guards/jwt-auth.guard';
+import { JwtAuthGuard } from './presentation/auth/guards/jwt-auth.guard';
 import { IdentityResolver } from './presentation/graphql/resolvers/identity.resolver';
 import { CognitoTokenVerifier } from './infrastructure/cognito/cognito-token.verifier';
 import { IdentityProfilePort } from './application/ports/identity-profile.port';
@@ -15,6 +15,9 @@ import { CognitoIdentityProfileProvider } from './infrastructure/cognito/cognito
 import { ProvisionUserUseCase } from './application/use-cases/provision-user.use-case';
 import { GetUsersByIdsUseCase } from './application/use-cases/get-users-by-ids.use-case';
 import { UpdateMyProfileUseCase } from './application/use-cases/update-my-profile.use-case';
+import { MachineTokenVerifierPort } from './application/ports/machine-token-verifier.port';
+import { CognitoMachineTokenVerifier } from './infrastructure/cognito/cognito-machine-token.verifier';
+import { MachineAuthGuard } from './presentation/auth/guards/machine-auth.guard';
 
 @Module({
   imports: [PrismaModule],
@@ -27,6 +30,15 @@ import { UpdateMyProfileUseCase } from './application/use-cases/update-my-profil
         new CognitoTokenVerifier({
           userPoolId: env.get('COGNITO_USER_POOL_ID'),
           clientIds: env.get('COGNITO_CLIENT_IDS'),
+        }),
+    },
+    {
+      provide: MachineTokenVerifierPort,
+      inject: [EnvService],
+      useFactory: (env: EnvService) =>
+        new CognitoMachineTokenVerifier({
+          userPoolId: env.get('COGNITO_USER_POOL_ID'),
+          clientIds: env.get('COGNITO_MACHINE_CLIENT_IDS'),
         }),
     },
     {
@@ -62,13 +74,16 @@ import { UpdateMyProfileUseCase } from './application/use-cases/update-my-profil
       ) => new UpdateMyProfileUseCase(users, getCurrentUser),
     },
     JwtAuthGuard,
+    MachineAuthGuard,
     IdentityResolver,
   ],
   exports: [
     GetCurrentUserUseCase,
     GetUsersByIdsUseCase,
     TokenVerifierPort,
+    MachineTokenVerifierPort,
     JwtAuthGuard,
+    MachineAuthGuard,
   ],
 })
 export class IdentityModule {}

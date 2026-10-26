@@ -6,7 +6,7 @@ import { ApolloDriver, ApolloDriverConfig } from '@nestjs/apollo';
 import { formatGraphqlError } from './shared/presentation/graphql/format-graphql-error';
 import { join } from 'node:path';
 import { APP_FILTER } from '@nestjs/core';
-import { DomainErrorFilter } from './shared/presentation/graphql/domain-error.filter';
+import { DomainErrorFilter } from './shared/presentation/domain-error.filter';
 import { OrganizationsModule } from './modules/organizations/organizations.module';
 
 @Module({

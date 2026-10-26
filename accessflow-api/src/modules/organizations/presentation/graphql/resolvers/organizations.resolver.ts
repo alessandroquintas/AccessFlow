@@ -1,8 +1,8 @@
 import { UseGuards } from '@nestjs/common';
 import { Args, ID, Mutation, Query, Resolver } from '@nestjs/graphql';
 import type { AuthenticatedIdentity } from '@/modules/identity/application/ports/token-verifier.port';
-import { JwtAuthGuard } from '@/modules/identity/presentation/graphql/guards/jwt-auth.guard';
-import { CurrentIdentity } from '@/modules/identity/presentation/graphql/decorators/current-identity.decorator';
+import { JwtAuthGuard } from '@/modules/identity/presentation/auth/guards/jwt-auth.guard';
+import { CurrentIdentity } from '@/modules/identity/presentation/auth/decorators/current-identity.decorator';
 import { ListMyOrganizationsUseCase } from '@/modules/organizations/application/use-cases/list-my-organizations.use-case';
 import { GetOrganizationUseCase } from '@/modules/organizations/application/use-cases/get-organization.use-case';
 

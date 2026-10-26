@@ -1,3 +1,4 @@
+import { Logger } from '@nestjs/common';
 import { CognitoJwtVerifier } from 'aws-jwt-verify';
 import {
   AuthenticatedIdentity,
@@ -22,6 +23,7 @@ function createVerifier(options: CognitoTokenVerifierOptions) {
 }
 
 export class CognitoTokenVerifier extends TokenVerifierPort {
+  private readonly logger = new Logger(CognitoTokenVerifier.name);
   private readonly verifier: ReturnType<typeof createVerifier>;
 
   constructor(options: CognitoTokenVerifierOptions, jwks?: Jwks) {
@@ -49,7 +51,11 @@ export class CognitoTokenVerifier extends TokenVerifierPort {
         sub: payload.sub,
         clientId: payload.client_id,
       };
-    } catch {
+    } catch (error) {
+      // Só o motivo vai para o log, nunca o token.
+      this.logger.warn(
+        `Token de usuário recusado: ${error instanceof Error ? error.message : 'motivo desconhecido'}`,
+      );
       throw new InvalidAccessTokenError();
     }
   }
