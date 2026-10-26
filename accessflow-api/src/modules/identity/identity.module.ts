@@ -12,7 +12,8 @@ import { IdentityProfilePort } from './application/ports/identity-profile.port';
 import { ConfigService } from '@nestjs/config';
 import { Env } from '@/config/env.schema';
 import { CognitoIdentityProfileProvider } from './infrastructure/cognito/cognito-identity-profile.provider';
-import { ProvisionUserUseCase } from './application/use-cases/provision-user.use.case';
+import { ProvisionUserUseCase } from './application/use-cases/provision-user.use-case';
+import { GetUsersByIdsUseCase } from './application/use-cases/get-users-by-ids.use-case';
 
 @Module({
   imports: [PrismaModule],
@@ -46,9 +47,19 @@ import { ProvisionUserUseCase } from './application/use-cases/provision-user.use
       useFactory: (users: UserRepository, profile: IdentityProfilePort) =>
         new ProvisionUserUseCase(users, profile),
     },
+    {
+      provide: GetUsersByIdsUseCase,
+      inject: [UserRepository],
+      useFactory: (users: UserRepository) => new GetUsersByIdsUseCase(users),
+    },
     JwtAuthGuard,
     IdentityResolver,
   ],
-  exports: [GetCurrentUserUseCase, TokenVerifierPort, JwtAuthGuard],
+  exports: [
+    GetCurrentUserUseCase,
+    GetUsersByIdsUseCase,
+    TokenVerifierPort,
+    JwtAuthGuard,
+  ],
 })
 export class IdentityModule {}

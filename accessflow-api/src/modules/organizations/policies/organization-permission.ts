@@ -32,7 +32,5 @@ export function roleHasPermission(
   role: MembershipRole,
   permission: OrganizationPermission,
 ): boolean {
-  const hasPermission = PERMISSION_BY_ROLE[role].has(permission);
-
-  return hasPermission;
+  return PERMISSION_BY_ROLE[role].has(permission);
 }

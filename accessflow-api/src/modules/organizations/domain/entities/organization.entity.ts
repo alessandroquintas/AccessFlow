@@ -46,7 +46,7 @@ export class Organization {
     const { id, name, slug } = props;
 
     if (!id?.trim()) {
-      throw new InvalidOrganizationError('id é obrigatorio.');
+      throw new InvalidOrganizationError('id é obrigatório.');
     }
 
     return new Organization({

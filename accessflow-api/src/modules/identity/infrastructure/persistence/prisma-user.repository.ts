@@ -2,8 +2,8 @@ import { Injectable } from '@nestjs/common';
 import { UserRepository } from '../../domain/repositories/user.repository';
 import { User } from '../../domain/entities/user.entity';
 import { PrismaService } from '@/shared/infrastructure/database/prisma.service';
+import { isUniqueViolation } from '@/shared/infrastructure/database/prisma-errors';
 import { PrismaUserMapper } from './mappers/prisma-user.mapper';
-import { Prisma } from '@prisma/client';
 import { UserAlreadyExistsError } from '../../domain/errors/user-already-exists.error';
 
 @Injectable()
@@ -19,9 +19,23 @@ export class PrismaUserRepository extends UserRepository {
       },
     });
 
-    const result = data ? PrismaUserMapper.toDomain(data) : null;
+    return data ? PrismaUserMapper.toDomain(data) : null;
+  }
 
-    return result;
+  async findByIds(ids: string[]): Promise<User[]> {
+    if (ids.length === 0) {
+      return [];
+    }
+
+    const records = await this.prisma.user.findMany({
+      where: {
+        id: {
+          in: ids,
+        },
+      },
+    });
+
+    return records.map(PrismaUserMapper.toDomain);
   }
 
   async create(user: User): Promise<void> {
@@ -30,10 +44,7 @@ export class PrismaUserRepository extends UserRepository {
         data: PrismaUserMapper.toPersistence(user),
       });
     } catch (error) {
-      if (
-        error instanceof Prisma.PrismaClientKnownRequestError &&
-        error.code === 'P2002'
-      ) {
+      if (isUniqueViolation(error, 'cognito_sub')) {
         throw new UserAlreadyExistsError();
       }
       throw error;

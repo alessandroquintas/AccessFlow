@@ -6,8 +6,8 @@ import {
   MembershipRole,
 } from '@/modules/organizations/domain/entities/membership.entity';
 import { SlugAlreadyTakenError } from '@/modules/organizations/domain/errors/slug-already-taken.error';
-import { PrismaOrganizationRepository } from '@/modules/organizations/infrastructure/persistenece/prisma-organization.repository';
-import { PrismaMembershipRepository } from '@/modules/organizations/infrastructure/persistenece/prisma-membership.repository';
+import { PrismaOrganizationRepository } from '@/modules/organizations/infrastructure/persistence/prisma-organization.repository';
+import { PrismaMembershipRepository } from '@/modules/organizations/infrastructure/persistence/prisma-membership.repository';
 
 let prisma: PrismaService;
 let organizations: PrismaOrganizationRepository;

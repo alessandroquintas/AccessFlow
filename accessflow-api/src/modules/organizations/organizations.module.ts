@@ -2,6 +2,7 @@ import { Module } from '@nestjs/common';
 import { PrismaModule } from '@/shared/infrastructure/database/prisma.module';
 import { IdentityModule } from '@/modules/identity/identity.module';
 import { GetCurrentUserUseCase } from '@/modules/identity/application/use-cases/get-current-user.use-case';
+import { GetUsersByIdsUseCase } from '@/modules/identity/application/use-cases/get-users-by-ids.use-case';
 import { OrganizationRepository } from './domain/repositories/organization.repository';
 import { MembershipRepository } from './domain/repositories/membership.repository';
 import { UserDirectoryPort } from './application/ports/user-directory.port';
@@ -11,9 +12,9 @@ import { GetOrganizationUseCase } from './application/use-cases/get-organization
 import { UpdateOrganizationUseCase } from './application/use-cases/update-organization.use-case';
 import { IdentityUserDirectory } from './infrastructure/identity/identity-user-directory';
 import { OrganizationsResolver } from './presentation/graphql/resolvers/organizations.resolver';
-import { PrismaOrganizationRepository } from './infrastructure/persistenece/prisma-organization.repository';
-import { PrismaMembershipRepository } from './infrastructure/persistenece/prisma-membership.repository';
-import { CreateOrganizationUseCase } from './application/use-cases/create-organization.use.case';
+import { PrismaOrganizationRepository } from './infrastructure/persistence/prisma-organization.repository';
+import { PrismaMembershipRepository } from './infrastructure/persistence/prisma-membership.repository';
+import { CreateOrganizationUseCase } from './application/use-cases/create-organization.use-case';
 
 @Module({
   imports: [PrismaModule, IdentityModule],
@@ -25,9 +26,11 @@ import { CreateOrganizationUseCase } from './application/use-cases/create-organi
     // Adaptador para o módulo Identity
     {
       provide: UserDirectoryPort,
-      inject: [GetCurrentUserUseCase],
-      useFactory: (getCurrentUser: GetCurrentUserUseCase) =>
-        new IdentityUserDirectory(getCurrentUser),
+      inject: [GetCurrentUserUseCase, GetUsersByIdsUseCase],
+      useFactory: (
+        getCurrentUser: GetCurrentUserUseCase,
+        getUsersByIds: GetUsersByIdsUseCase,
+      ) => new IdentityUserDirectory(getCurrentUser, getUsersByIds),
     },
 
     // Serviços de aplicação

@@ -6,7 +6,7 @@ import {
 export function makeUser(
   overrides: Partial<Parameters<typeof User.restore>[0]> = {},
 ) {
-  const user = User.restore({
+  return User.restore({
     id: '6f1c2a3e-0000-4000-8000-000000000001',
     cognitoSub: 'sub-123',
     name: 'Ana',
@@ -16,14 +16,10 @@ export function makeUser(
     updatedAt: new Date('2026-01-01'),
     ...overrides,
   });
-
-  return user;
 }
 
 export function makeUserInactive(
   overrides: Partial<Parameters<typeof User.restore>[0]> = {},
 ) {
-  const user = makeUser({ status: UserStatus.INACTIVE, ...overrides });
-
-  return user;
+  return makeUser({ status: UserStatus.INACTIVE, ...overrides });
 }

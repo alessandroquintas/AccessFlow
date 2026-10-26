@@ -16,7 +16,7 @@ export type MembershipRole =
 export const MembershipStatus = {
   ACTIVE: 'ACTIVE',
   REMOVED: 'REMOVED',
-};
+} as const;
 
 export type MembershipStatus =
   (typeof MembershipStatus)[keyof typeof MembershipStatus];
@@ -66,15 +66,15 @@ export class Membership {
     const { id, organizationId, userId } = props;
 
     if (!id?.trim()) {
-      throw new InvalidMembershipError('id é obrigatorio');
+      throw new InvalidMembershipError('id é obrigatório.');
     }
 
     if (!organizationId?.trim()) {
-      throw new InvalidMembershipError('oganizationId é obrigatorio.');
+      throw new InvalidMembershipError('organizationId é obrigatório.');
     }
 
     if (!userId?.trim()) {
-      throw new InvalidMembershipError('userId é obrigatorio.');
+      throw new InvalidMembershipError('userId é obrigatório.');
     }
 
     return new Membership({ ...props });
@@ -121,10 +121,6 @@ export class Membership {
   }
 
   can(permission: OrganizationPermission): boolean {
-    const role = this.props.role;
-
-    const hasCan = this.isActive() && roleHasPermission(role, permission);
-
-    return hasCan;
+    return this.isActive() && roleHasPermission(this.props.role, permission);
   }
 }

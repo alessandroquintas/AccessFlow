@@ -7,7 +7,7 @@ import { InvalidAccessTokenError } from '@/modules/identity/application/errors/i
 import { InMemoryUserRepository } from '@test/in-memory/identity/in-memory-user-repository';
 import { FakeIdentityProfileProvider } from '@test/fakes/identity/fake-identity-profile-provider';
 import { makeUser } from '@test/factory/identity/make-user';
-import { ProvisionUserUseCase } from '@/modules/identity/application/use-cases/provision-user.use.case';
+import { ProvisionUserUseCase } from '@/modules/identity/application/use-cases/provision-user.use-case';
 
 let users: InMemoryUserRepository;
 let profiles: FakeIdentityProfileProvider;

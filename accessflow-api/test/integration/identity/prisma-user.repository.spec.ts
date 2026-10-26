@@ -70,6 +70,30 @@ describe('PrismaUserRepository (integração)', () => {
     expect(user?.isActive()).toBe(false);
   });
 
+  it('findByIds devolve só os usuários existentes', async () => {
+    const ana = await prisma.user.create({
+      data: { cognitoSub: 'sub-ana', name: 'Ana', email: 'ana@example.com' },
+    });
+    const bruno = await prisma.user.create({
+      data: {
+        cognitoSub: 'sub-bruno',
+        name: 'Bruno',
+        email: 'bruno@example.com',
+      },
+    });
+
+    const users = await sut.findByIds([ana.id, bruno.id, crypto.randomUUID()]);
+
+    expect(users.map((user) => user.id).sort()).toEqual(
+      [ana.id, bruno.id].sort(),
+    );
+    expect(users.every((user) => user instanceof User)).toBe(true);
+  });
+
+  it('findByIds com lista vazia devolve lista vazia', async () => {
+    expect(await sut.findByIds([])).toEqual([]);
+  });
+
   it('persiste um usuário criado pelo domínio', async () => {
     const user = User.create({
       cognitoSub: 'sub-nova',

@@ -7,7 +7,7 @@ registerEnumType(OrganizationStatus, { name: 'OrganizationStatus' });
 registerEnumType(MembershipRole, { name: 'MembershipRole' });
 
 @ObjectType('Organization')
-export class OrganizationTypes {
+export class OrganizationType {
   @Field(() => ID)
   id!: string;
 
@@ -31,8 +31,8 @@ export class OrganizationTypes {
   static from({
     organization,
     membership,
-  }: OrganizationWithMembership): OrganizationTypes {
-    const type = new OrganizationTypes();
+  }: OrganizationWithMembership): OrganizationType {
+    const type = new OrganizationType();
     type.id = organization.id;
     type.name = organization.name;
     type.slug = organization.slug;

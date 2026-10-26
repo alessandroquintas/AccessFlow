@@ -5,7 +5,7 @@ import { GetCurrentUserUseCase } from '@/modules/identity/application/use-cases/
 import { UserType } from '../types/user.type';
 import { JwtAuthGuard } from '../guards/jwt-auth.guard';
 import { CurrentIdentity } from '../decorators/current-identity.decorator';
-import { ProvisionUserUseCase } from '@/modules/identity/application/use-cases/provision-user.use.case';
+import { ProvisionUserUseCase } from '@/modules/identity/application/use-cases/provision-user.use-case';
 import { CurrentAccessToken } from '../decorators/current-access-token.decorator';
 import { ProvisionMeInput } from '../inputs/provision-me.input';
 

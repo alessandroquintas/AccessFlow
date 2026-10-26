@@ -4,9 +4,7 @@ import { OrganizationNotFoundError } from '@/modules/organizations/domain/errors
 import { OrganizationWithMembership } from '../dto/organization-with-membership';
 import { OrganizationPermission } from '../../policies/organization-permission';
 import { OrganizationPermissionDeniedError } from '../../domain/errors/organization-permission-denied.error';
-
-const UUID_PATTERN =
-  /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i;
+import { isUuid } from '@/shared/domain/uuid';
 
 export class OrganizationAccessService {
   constructor(
@@ -23,8 +21,7 @@ export class OrganizationAccessService {
     organizationId: string,
     userId: string,
   ): Promise<OrganizationWithMembership> {
-    if (!UUID_PATTERN.test(organizationId))
-      throw new OrganizationNotFoundError();
+    if (!isUuid(organizationId)) throw new OrganizationNotFoundError();
 
     const membership = await this.memberships.findByOrganizationAndUser(
       organizationId,

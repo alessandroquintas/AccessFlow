@@ -10,7 +10,7 @@ import { UserNotFoundError } from '@/modules/identity/domain/errors/user-not-fou
 import { InMemoryOrganizationRepository } from '@test/in-memory/organizations/in-memory-organization-repository';
 import { InMemoryMembershipRepository } from '@test/in-memory/organizations/in-memory-membership-repository';
 import { FakeUserDirectory } from '@test/fakes/organizations/fake-user-directory';
-import { CreateOrganizationUseCase } from '@/modules/organizations/application/use-cases/create-organization.use.case';
+import { CreateOrganizationUseCase } from '@/modules/organizations/application/use-cases/create-organization.use-case';
 
 const ANA = { sub: 'sub-ana', id: '11111111-1111-4111-8111-111111111111' };
 const BRUNO = { sub: 'sub-bruno', id: '22222222-2222-4222-8222-222222222222' };

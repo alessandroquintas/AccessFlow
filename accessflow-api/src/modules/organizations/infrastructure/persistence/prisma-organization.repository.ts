@@ -1,22 +1,12 @@
 import { Injectable } from '@nestjs/common';
-import { Prisma } from '@prisma/client';
 import { PrismaService } from '@/shared/infrastructure/database/prisma.service';
+import { isUniqueViolation } from '@/shared/infrastructure/database/prisma-errors';
 import { Organization } from '@/modules/organizations/domain/entities/organization.entity';
 import { Membership } from '@/modules/organizations/domain/entities/membership.entity';
 import { OrganizationRepository } from '@/modules/organizations/domain/repositories/organization.repository';
 import { SlugAlreadyTakenError } from '@/modules/organizations/domain/errors/slug-already-taken.error';
 import { PrismaOrganizationMapper } from './mappers/prisma-organization.mapper';
 import { PrismaMembershipMapper } from './mappers/prisma-membership.mapper';
-
-const UNIQUE_CONSTRAINT_VIOLATION = 'P2002';
-
-function isUniqueViolationOn(error: unknown, field: string): boolean {
-  return (
-    error instanceof Prisma.PrismaClientKnownRequestError &&
-    error.code === UNIQUE_CONSTRAINT_VIOLATION &&
-    String(error.meta?.target ?? '').includes(field)
-  );
-}
 
 @Injectable()
 export class PrismaOrganizationRepository extends OrganizationRepository {
@@ -61,7 +51,7 @@ export class PrismaOrganizationRepository extends OrganizationRepository {
         }),
       ]);
     } catch (error) {
-      if (isUniqueViolationOn(error, 'slug')) throw new SlugAlreadyTakenError();
+      if (isUniqueViolation(error, 'slug')) throw new SlugAlreadyTakenError();
       throw error;
     }
   }
