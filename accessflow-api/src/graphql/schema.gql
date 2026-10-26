@@ -24,10 +24,16 @@ type Mutation {
   """Cria uma organização. O usuário autenticado se torna OWNER."""
   createOrganization(input: CreateOrganizationInput!): Organization!
 
+  """O usuário autenticado sai da organização."""
+  leaveOrganization(organizationId: ID!): Boolean!
+
   """
   Cria o perfil local do usuário autenticado. Se já existir, devolve o existente
   """
   provisionMe(input: ProvisionMeInput!): User!
+
+  """Remove um membro da organização. Exige ser OWNER."""
+  removeMember(organizationId: ID!, userId: ID!): Boolean!
 
   """Atualiza os dados da organização. """
   updateOrganization(input: UpdateOrganizationInput!, organizationId: ID!): Organization!
@@ -44,9 +50,29 @@ type Organization {
   viewerRole: MembershipRole!
 }
 
+type OrganizationMember {
+  email: String!
+
+  """Quando o usuário entrou na organização."""
+  joinedAt: DateTime!
+  name: String!
+  role: MembershipRole!
+  userId: ID!
+}
+
+type OrganizationMemberConnection {
+  nodes: [OrganizationMember!]!
+  pageInfo: PageInfo!
+}
+
 enum OrganizationStatus {
   ACTIVE
   INACTIVE
+}
+
+type PageInfo {
+  endCursor: String
+  hasNextPage: Boolean!
 }
 
 input ProvisionMeInput {
@@ -63,6 +89,9 @@ type Query {
 
   """Uma organização da qual o usuário autenticado é membro."""
   organization(organizationId: ID!): Organization!
+
+  """Membros ativos da organização, do mais antigo para o mais recente."""
+  organizationMembers(after: String, first: Int, organizationId: ID!): OrganizationMemberConnection!
 }
 
 input UpdateOrganizationInput {

@@ -27,6 +27,8 @@ describe('Cursor de paginação', () => {
     ['id que não é UUID', toCursor('2026-10-26T12:34:56.789Z|abc')],
     ['data inválida', toCursor(`nao-e-data|${ID}`)],
     ['data fora do formato ISO', toCursor(`1|${ID}`)],
+    ['data por extenso', toCursor(`March 7, 2026|${ID}`)],
+    ['data ISO sem hora', toCursor(`2026-10-26|${ID}`)],
     ['sem separador', toCursor(`2026-10-26T12:34:56.789Z${ID}`)],
     ['sem id', toCursor('2026-10-26T12:34:56.789Z|')],
     ['partes a mais', toCursor(`2026-10-26T12:34:56.789Z|${ID}|extra`)],

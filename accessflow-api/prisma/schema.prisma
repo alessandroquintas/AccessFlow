@@ -53,6 +53,7 @@ model Membership {
 
   @@unique([organizationId, userId])
   @@index([userId])
+  @@index([organizationId, createdAt, id])
   @@map("memberships")
 }
 

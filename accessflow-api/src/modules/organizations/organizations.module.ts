@@ -15,6 +15,10 @@ import { OrganizationsResolver } from './presentation/graphql/resolvers/organiza
 import { PrismaOrganizationRepository } from './infrastructure/persistence/prisma-organization.repository';
 import { PrismaMembershipRepository } from './infrastructure/persistence/prisma-membership.repository';
 import { CreateOrganizationUseCase } from './application/use-cases/create-organization.use-case';
+import { ListOrganizationMembersUseCase } from './application/use-cases/list-organization-members.use-case';
+import { RemoveMemberUseCase } from './application/use-cases/remove-member.use-case';
+import { LeaveOrganizationUseCase } from './application/use-cases/leave-organization.use-case';
+import { MembersResolver } from './presentation/graphql/resolvers/members.resolver';
 
 @Module({
   imports: [PrismaModule, IdentityModule],
@@ -82,9 +86,49 @@ import { CreateOrganizationUseCase } from './application/use-cases/create-organi
         access: OrganizationAccessService,
       ) => new UpdateOrganizationUseCase(organizations, users, access),
     },
+    {
+      provide: ListOrganizationMembersUseCase,
+      inject: [
+        MembershipRepository,
+        UserDirectoryPort,
+        OrganizationAccessService,
+      ],
+      useFactory: (
+        memberships: MembershipRepository,
+        users: UserDirectoryPort,
+        access: OrganizationAccessService,
+      ) => new ListOrganizationMembersUseCase(memberships, users, access),
+    },
+    {
+      provide: RemoveMemberUseCase,
+      inject: [
+        MembershipRepository,
+        UserDirectoryPort,
+        OrganizationAccessService,
+      ],
+      useFactory: (
+        memberships: MembershipRepository,
+        users: UserDirectoryPort,
+        access: OrganizationAccessService,
+      ) => new RemoveMemberUseCase(memberships, users, access),
+    },
+    {
+      provide: LeaveOrganizationUseCase,
+      inject: [
+        MembershipRepository,
+        UserDirectoryPort,
+        OrganizationAccessService,
+      ],
+      useFactory: (
+        memberships: MembershipRepository,
+        users: UserDirectoryPort,
+        access: OrganizationAccessService,
+      ) => new LeaveOrganizationUseCase(memberships, users, access),
+    },
 
     // Apresentação
     OrganizationsResolver,
+    MembersResolver,
   ],
 })
 export class OrganizationsModule {}

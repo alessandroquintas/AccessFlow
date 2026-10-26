@@ -1,8 +1,16 @@
 import { Injectable } from '@nestjs/common';
-import { MembershipStatus as PrismaMembershipStatus } from '@prisma/client';
+import {
+  MembershipRole as PrismaMembershipRole,
+  MembershipStatus as PrismaMembershipStatus,
+} from '@prisma/client';
 import { PrismaService } from '@/shared/infrastructure/database/prisma.service';
 import { Membership } from '@/modules/organizations/domain/entities/membership.entity';
-import { MembershipRepository } from '@/modules/organizations/domain/repositories/membership.repository';
+import { LastOwnerError } from '@/modules/organizations/domain/errors/last-owner.error';
+import {
+  MembershipCursor,
+  MembershipPage,
+  MembershipRepository,
+} from '@/modules/organizations/domain/repositories/membership.repository';
 import { PrismaMembershipMapper } from './mappers/prisma-membership.mapper';
 
 @Injectable()
@@ -37,5 +45,60 @@ export class PrismaMembershipRepository extends MembershipRepository {
       },
     });
     return records.map(PrismaMembershipMapper.toDomain);
+  }
+
+  async listActiveByOrganization(
+    organizationId: string,
+    { first, after }: { first: number; after?: MembershipCursor },
+  ): Promise<MembershipPage> {
+    // Um item a mais indica se existe próxima página, sem precisar de count.
+    const records = await this.prisma.membership.findMany({
+      where: {
+        organizationId,
+        status: PrismaMembershipStatus.ACTIVE,
+        ...(after && {
+          OR: [
+            { createdAt: { gt: after.createdAt } },
+            { createdAt: after.createdAt, id: { gt: after.id } },
+          ],
+        }),
+      },
+      orderBy: [{ createdAt: 'asc' }, { id: 'asc' }],
+      take: first + 1,
+    });
+
+    return {
+      items: records.slice(0, first).map(PrismaMembershipMapper.toDomain),
+      hasNextPage: records.length > first,
+    };
+  }
+
+  async remove(membership: Membership): Promise<void> {
+    await this.prisma.$transaction(async (tx) => {
+      // Trava a organização: remoções concorrentes nela esperam aqui e só
+      // contam os OWNERs depois que a anterior terminar.
+      await tx.$queryRaw`SELECT id FROM organizations WHERE id = ${membership.organizationId}::uuid FOR UPDATE`;
+
+      if (membership.isOwner()) {
+        const otherOwners = await tx.membership.count({
+          where: {
+            organizationId: membership.organizationId,
+            role: PrismaMembershipRole.OWNER,
+            status: PrismaMembershipStatus.ACTIVE,
+            id: { not: membership.id },
+          },
+        });
+        if (otherOwners === 0) throw new LastOwnerError();
+      }
+
+      membership.remove();
+      const { status, updatedAt } =
+        PrismaMembershipMapper.toPersistence(membership);
+
+      await tx.membership.update({
+        where: { id: membership.id },
+        data: { status, updatedAt },
+      });
+    });
   }
 }
