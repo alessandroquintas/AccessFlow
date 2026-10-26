@@ -57,14 +57,16 @@ export class PrismaOrganizationRepository extends OrganizationRepository {
   }
 
   async save(organization: Organization): Promise<void> {
-    const { id, ...data } =
+    // Só o que a entidade permite alterar: regravar os outros campos
+    // desfaria mudanças concorrentes feitas por outro caminho.
+    const { id, name, status, updatedAt } =
       PrismaOrganizationMapper.toPersistence(organization);
 
     await this.prisma.organization.update({
       where: {
         id,
       },
-      data,
+      data: { name, status, updatedAt },
     });
   }
 }

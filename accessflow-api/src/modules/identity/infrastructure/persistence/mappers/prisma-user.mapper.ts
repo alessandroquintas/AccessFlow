@@ -1,40 +1,45 @@
 import {
+  Prisma,
+  UserStatus as PrismaUserStatus,
+  type User as PrismaUser,
+} from '@prisma/client';
+import {
   User,
   UserStatus,
 } from '@/modules/identity/domain/entities/user.entity';
-import type { User as PrismaUser } from '@prisma/client';
+
+const STATUS_TO_DOMAIN: Record<PrismaUserStatus, UserStatus> = {
+  ACTIVE: UserStatus.ACTIVE,
+  INACTIVE: UserStatus.INACTIVE,
+};
+
+const STATUS_TO_PERSISTENCE: Record<UserStatus, PrismaUserStatus> = {
+  ACTIVE: PrismaUserStatus.ACTIVE,
+  INACTIVE: PrismaUserStatus.INACTIVE,
+};
 
 export class PrismaUserMapper {
-  static toDomain(data: PrismaUser): User {
+  static toDomain(record: PrismaUser): User {
     return User.restore({
-      id: data.id,
-      cognitoSub: data.cognitoSub,
-      name: data.name,
-      email: data.email,
-      status: PrismaUserMapper.toDomainStatus(data.status),
-      createdAt: data.createdAt,
-      updatedAt: data.updatedAt,
+      id: record.id,
+      cognitoSub: record.cognitoSub,
+      name: record.name,
+      email: record.email,
+      status: STATUS_TO_DOMAIN[record.status],
+      createdAt: record.createdAt,
+      updatedAt: record.updatedAt,
     });
   }
 
-  static toPersistence(user: User) {
+  static toPersistence(user: User): Prisma.UserUncheckedCreateInput {
     return {
       id: user.id,
       cognitoSub: user.cognitoSub,
       name: user.name,
       email: user.email,
-      status: user.status,
+      status: STATUS_TO_PERSISTENCE[user.status],
       createdAt: user.createdAt,
       updatedAt: user.updatedAt,
     };
-  }
-
-  private static toDomainStatus(status: PrismaUser['status']): UserStatus {
-    switch (status) {
-      case 'ACTIVE':
-        return UserStatus.ACTIVE;
-      case 'INACTIVE':
-        return UserStatus.INACTIVE;
-    }
   }
 }

@@ -128,6 +128,32 @@ describe('PrismaUserRepository (integração)', () => {
     expect(found?.updatedAt).toEqual(renamedAt);
   });
 
+  it('save não desfaz uma desativação concorrente', async () => {
+    await sut.create(
+      User.create({
+        cognitoSub: 'sub-ana',
+        name: 'Ana',
+        email: 'ana@example.com',
+      }),
+    );
+    const user = await sut.findByCognitoSub('sub-ana');
+
+    // Outra requisição desativa o perfil depois que a entidade foi carregada.
+    await prisma.user.update({
+      where: { cognitoSub: 'sub-ana' },
+      data: { status: 'INACTIVE' },
+    });
+
+    user!.rename('Ana Paula');
+    await sut.save(user!);
+
+    const record = await prisma.user.findUnique({
+      where: { cognitoSub: 'sub-ana' },
+    });
+    expect(record?.status).toBe('INACTIVE');
+    expect(record?.name).toBe('Ana Paula');
+  });
+
   it('lança UserAlreadyExistsError para cognitoSub duplicado', async () => {
     await sut.create(
       User.create({

@@ -52,13 +52,15 @@ export class PrismaUserRepository extends UserRepository {
   }
 
   async save(user: User): Promise<void> {
-    const { id, ...data } = PrismaUserMapper.toPersistence(user);
+    // Só o que a entidade permite alterar: regravar os outros campos
+    // desfaria mudanças concorrentes, como uma desativação.
+    const { id, name, updatedAt } = PrismaUserMapper.toPersistence(user);
 
     await this.prisma.user.update({
       where: {
         id,
       },
-      data,
+      data: { name, updatedAt },
     });
   }
 }
