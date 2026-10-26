@@ -23,4 +23,11 @@ export class InMemoryUserRepository extends UserRepository {
     }
     this.items.push(user);
   }
+
+  async save(user: User): Promise<void> {
+    const index = this.items.findIndex((item) => item.id === user.id);
+    if (index >= 0) {
+      this.items[index] = user;
+    }
+  }
 }

@@ -8,12 +8,15 @@ import { CurrentIdentity } from '../decorators/current-identity.decorator';
 import { ProvisionUserUseCase } from '@/modules/identity/application/use-cases/provision-user.use-case';
 import { CurrentAccessToken } from '../decorators/current-access-token.decorator';
 import { ProvisionMeInput } from '../inputs/provision-me.input';
+import { UpdateMyProfileUseCase } from '@/modules/identity/application/use-cases/update-my-profile.use-case';
+import { UpdateMyProfileInput } from '../inputs/update-my-profile.input';
 
 @Resolver(() => UserType)
 export class IdentityResolver {
   constructor(
     private readonly getCurrentUser: GetCurrentUserUseCase,
     private readonly provisionUser: ProvisionUserUseCase,
+    private readonly updateProfile: UpdateMyProfileUseCase,
   ) {}
 
   @Query(() => UserType, { description: 'Perfil do usuário autenticado.' })
@@ -38,6 +41,22 @@ export class IdentityResolver {
     const user = await this.provisionUser.execute({
       cognitoSub: identity.sub,
       accessToken,
+      name: input.name,
+    });
+    return UserType.fromDomain(user);
+  }
+
+  @Mutation(() => UserType, {
+    description:
+      'Atualiza o perfil do usuário autenticado. O e-mail vem do Cognito e não é editável.',
+  })
+  @UseGuards(JwtAuthGuard)
+  async updateMyProfile(
+    @CurrentIdentity() identity: AuthenticatedIdentity,
+    @Args('input') input: UpdateMyProfileInput,
+  ): Promise<UserType> {
+    const user = await this.updateProfile.execute({
+      cognitoSub: identity.sub,
       name: input.name,
     });
     return UserType.fromDomain(user);

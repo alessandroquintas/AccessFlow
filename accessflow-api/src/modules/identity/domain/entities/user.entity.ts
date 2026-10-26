@@ -25,7 +25,7 @@ interface UserState extends Omit<UserProps, 'name' | 'email'> {
   email: Email;
 }
 export class User {
-  private constructor(private readonly props: UserState) {}
+  private constructor(private props: UserState) {}
 
   static create(
     input: { cognitoSub: string; name: string; email: string },
@@ -84,5 +84,13 @@ export class User {
 
   isActive(): boolean {
     return this.props.status === UserStatus.ACTIVE;
+  }
+
+  rename(name: string, now: Date = new Date()): void {
+    this.props = {
+      ...this.props,
+      name: UserName.create(name),
+      updatedAt: now,
+    };
   }
 }

@@ -50,4 +50,15 @@ export class PrismaUserRepository extends UserRepository {
       throw error;
     }
   }
+
+  async save(user: User): Promise<void> {
+    const { id, ...data } = PrismaUserMapper.toPersistence(user);
+
+    await this.prisma.user.update({
+      where: {
+        id,
+      },
+      data,
+    });
+  }
 }

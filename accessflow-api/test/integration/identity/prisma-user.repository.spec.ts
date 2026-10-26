@@ -108,6 +108,26 @@ describe('PrismaUserRepository (integração)', () => {
     expect(found?.email).toBe('nova@example.com');
   });
 
+  it('save persiste o novo nome e atualiza updatedAt', async () => {
+    const createdAt = new Date('2026-01-01T00:00:00.000Z');
+    const user = User.create(
+      { cognitoSub: 'sub-ana', name: 'Ana', email: 'ana@example.com' },
+      createdAt,
+    );
+    await sut.create(user);
+
+    const renamedAt = new Date('2026-03-01T10:00:00.000Z');
+    user.rename('Ana Paula', renamedAt);
+    await sut.save(user);
+
+    const found = await sut.findByCognitoSub('sub-ana');
+    expect(found?.id).toBe(user.id);
+    expect(found?.name).toBe('Ana Paula');
+    expect(found?.email).toBe('ana@example.com');
+    expect(found?.createdAt).toEqual(createdAt);
+    expect(found?.updatedAt).toEqual(renamedAt);
+  });
+
   it('lança UserAlreadyExistsError para cognitoSub duplicado', async () => {
     await sut.create(
       User.create({

@@ -35,6 +35,9 @@ export class MembersResolver {
       cognitoSub: identity.sub,
       organizationId,
       first: clampPageSize(first),
+      // Decodificado antes da checagem de acesso de propósito: INVALID_CURSOR
+      // não depende da organização e é igual para qualquer organizationId,
+      // então não revela se ela existe.
       after: typeof after === 'string' ? decodeCursor(after) : undefined,
     });
 

@@ -14,6 +14,7 @@ import { Env } from '@/config/env.schema';
 import { CognitoIdentityProfileProvider } from './infrastructure/cognito/cognito-identity-profile.provider';
 import { ProvisionUserUseCase } from './application/use-cases/provision-user.use-case';
 import { GetUsersByIdsUseCase } from './application/use-cases/get-users-by-ids.use-case';
+import { UpdateMyProfileUseCase } from './application/use-cases/update-my-profile.use-case';
 
 @Module({
   imports: [PrismaModule],
@@ -51,6 +52,14 @@ import { GetUsersByIdsUseCase } from './application/use-cases/get-users-by-ids.u
       provide: GetUsersByIdsUseCase,
       inject: [UserRepository],
       useFactory: (users: UserRepository) => new GetUsersByIdsUseCase(users),
+    },
+    {
+      provide: UpdateMyProfileUseCase,
+      inject: [UserRepository, GetCurrentUserUseCase],
+      useFactory: (
+        users: UserRepository,
+        getCurrentUser: GetCurrentUserUseCase,
+      ) => new UpdateMyProfileUseCase(users, getCurrentUser),
     },
     JwtAuthGuard,
     IdentityResolver,

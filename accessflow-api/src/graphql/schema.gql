@@ -35,6 +35,11 @@ type Mutation {
   """Remove um membro da organização. Exige ser OWNER."""
   removeMember(organizationId: ID!, userId: ID!): Boolean!
 
+  """
+  Atualiza o perfil do usuário autenticado. O e-mail vem do Cognito e não é editável.
+  """
+  updateMyProfile(input: UpdateMyProfileInput!): User!
+
   """Atualiza os dados da organização. """
   updateOrganization(input: UpdateOrganizationInput!, organizationId: ID!): Organization!
 }
@@ -92,6 +97,11 @@ type Query {
 
   """Membros ativos da organização, do mais antigo para o mais recente."""
   organizationMembers(after: String, first: Int, organizationId: ID!): OrganizationMemberConnection!
+}
+
+input UpdateMyProfileInput {
+  """Novo nome de exibição (2 a 100 caracteres)."""
+  name: String!
 }
 
 input UpdateOrganizationInput {

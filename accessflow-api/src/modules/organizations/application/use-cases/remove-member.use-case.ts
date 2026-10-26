@@ -22,6 +22,10 @@ export class RemoveMemberUseCase {
   async execute(input: RemoveMemberInput): Promise<void> {
     const actorId = await this.users.getActiveUserId(input.cognitoSub);
 
+    // Limitação conhecida: a permissão do autor é checada fora da transação
+    // do remove. Com 3 ou mais OWNERs, se o autor for removido no mesmo
+    // instante em que remove outro membro, a ação dele ainda passa (a regra
+    // do último OWNER continua garantida). Será tratado com o RBAC da Fase 8.
     await this.access.requirePermission(
       input.organizationId,
       actorId,
