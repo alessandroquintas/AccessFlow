@@ -13,6 +13,7 @@ import { ClockPort } from '@/shared/application/ports/clock.port';
 import { decodeCursor } from '@/shared/presentation/graphql/pagination/cursor';
 import { clampPageSize } from '@/shared/presentation/graphql/pagination/page-size';
 import { InviteMemberInput } from '../inputs/invite-member.input';
+import { systemKeyOf } from '../../membership-role';
 import { OrganizationInvitationType } from '../types/organization-invitation.type';
 import { OrganizationInvitationConnectionType } from '../types/organization-invitation-connection.type';
 import { MyInvitationType } from '../types/my-invitation.type';
@@ -45,7 +46,7 @@ export class InvitationsResolver {
       cognitoSub: identity.sub,
       organizationId,
       email: input.email,
-      role: input.role,
+      role: systemKeyOf(input.role),
     });
 
     return OrganizationInvitationType.from(result, this.clock.now());

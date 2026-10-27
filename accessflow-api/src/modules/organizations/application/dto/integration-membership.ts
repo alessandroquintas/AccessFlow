@@ -1,8 +1,8 @@
-import { MembershipRole } from '../../domain/entities/membership.entity';
+import { Role } from '../../domain/entities/role.entity';
 
 export interface IntegrationMembership {
   organizationId: string;
   userId: string;
-  role: MembershipRole;
+  role: Role;
   joinedAt: Date;
 }

@@ -2,6 +2,7 @@ import { isUuid } from '@/shared/domain/uuid';
 import { IntegrationClientRepository } from '../../domain/repositories/integration-client.repository';
 import { MembershipRepository } from '../../domain/repositories/membership.repository';
 import { OrganizationRepository } from '../../domain/repositories/organization.repository';
+import { RoleRepository } from '../../domain/repositories/role.repository';
 import { MemberNotFoundError } from '../../domain/errors/member-not-found.error';
 import { OrganizationNotFoundError } from '../../domain/errors/organization-not-found.error';
 import { IntegrationMembership } from '../dto/integration-membership';
@@ -19,6 +20,7 @@ export class CheckMembershipForIntegrationUseCase {
     private readonly integrationClients: IntegrationClientRepository,
     private readonly organizations: OrganizationRepository,
     private readonly memberships: MembershipRepository,
+    private readonly roles: RoleRepository,
     private readonly users: UserDirectoryPort,
   ) {}
 
@@ -52,10 +54,13 @@ export class CheckMembershipForIntegrationUseCase {
     const [profile] = await this.users.getProfilesByIds([userId]);
     if (!profile?.active) throw new MemberNotFoundError();
 
+    const role = await this.roles.findById(organizationId, membership.roleId);
+    if (!role) throw new Error('Membership sem papel ativo na organização.');
+
     return {
       organizationId,
       userId,
-      role: membership.role,
+      role,
       joinedAt: membership.createdAt,
     };
   }

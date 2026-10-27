@@ -3,7 +3,7 @@ import {
   Invitation,
   InvitationStatus,
 } from '@/modules/organizations/domain/entities/invitation.entity';
-import { MembershipRole } from '@/modules/organizations/domain/entities/membership.entity';
+import { MembershipRole, membershipRoleOf } from '../../membership-role';
 import { Field, ID, ObjectType, registerEnumType } from '@nestjs/graphql';
 
 /** Status exposto: o do domínio mais EXPIRED, que nunca é gravado. */
@@ -66,13 +66,13 @@ export class OrganizationInvitationType {
   invitedBy!: InvitationInviterType;
 
   static from(
-    { invitation, invitedBy }: OrganizationInvitation,
+    { invitation, invitedBy, role }: OrganizationInvitation,
     now: Date,
   ): OrganizationInvitationType {
     const type = new OrganizationInvitationType();
     type.id = invitation.id;
     type.email = invitation.email;
-    type.role = invitation.role;
+    type.role = membershipRoleOf(role);
     type.status = invitationStatusAt(invitation, now);
     type.expiresAt = invitation.expiresAt;
     type.createdAt = invitation.createdAt;

@@ -1,5 +1,5 @@
 import { MyInvitation } from '@/modules/organizations/application/dto/my-invitation';
-import { MembershipRole } from '@/modules/organizations/domain/entities/membership.entity';
+import { MembershipRole, membershipRoleOf } from '../../membership-role';
 import { Field, ID, ObjectType } from '@nestjs/graphql';
 
 /** Só o que o convidado precisa para decidir: ele ainda não é membro. */
@@ -36,10 +36,11 @@ export class MyInvitationType {
     invitation,
     organization,
     invitedByName,
+    role,
   }: MyInvitation): MyInvitationType {
     const type = new MyInvitationType();
     type.id = invitation.id;
-    type.role = invitation.role;
+    type.role = membershipRoleOf(role);
     type.expiresAt = invitation.expiresAt;
     type.organization = {
       id: organization.id,

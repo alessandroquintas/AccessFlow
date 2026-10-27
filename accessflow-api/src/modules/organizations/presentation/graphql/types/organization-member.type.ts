@@ -1,5 +1,5 @@
 import { OrganizationMember } from '@/modules/organizations/application/dto/organization-member';
-import { MembershipRole } from '@/modules/organizations/domain/entities/membership.entity';
+import { MembershipRole, membershipRoleOf } from '../../membership-role';
 import { Field, ID, ObjectType } from '@nestjs/graphql';
 
 @ObjectType('OrganizationMember')
@@ -25,12 +25,13 @@ export class OrganizationMemberType {
   static from({
     membership,
     profile,
+    role,
   }: OrganizationMember): OrganizationMemberType {
     const type = new OrganizationMemberType();
     type.userId = membership.userId;
     type.name = profile.name;
     type.email = profile.email;
-    type.role = membership.role;
+    type.role = membershipRoleOf(role);
     type.joinedAt = membership.createdAt;
     return type;
   }

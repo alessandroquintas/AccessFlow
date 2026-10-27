@@ -1,3 +1,4 @@
+import { ClockPort } from '@/shared/application/ports/clock.port';
 import { MembershipRepository } from '../../domain/repositories/membership.repository';
 import { UserDirectoryPort } from '../ports/user-directory.port';
 import { OrganizationAccessService } from '../services/organization-access.service';
@@ -12,6 +13,7 @@ export class LeaveOrganizationUseCase {
     private readonly memberships: MembershipRepository,
     private readonly users: UserDirectoryPort,
     private readonly access: OrganizationAccessService,
+    private readonly clock: ClockPort,
   ) {}
 
   async execute(input: LeaveOrganizationInput): Promise<void> {
@@ -22,6 +24,6 @@ export class LeaveOrganizationUseCase {
       userId,
     );
 
-    await this.memberships.remove(membership);
+    await this.memberships.remove(membership, this.clock.now());
   }
 }

@@ -27,12 +27,14 @@ export abstract class MembershipRepository {
     options: { first: number; after?: MembershipCursor },
   ): Promise<MembershipPage>;
 
+  abstract create(membership: Membership): Promise<void>;
+
   /**
-   * Marca o membership como REMOVED (a linha nunca é apagada).
-   * Invariante: toda organização mantém pelo menos um OWNER ativo. Se o
-   * membership for o último OWNER ativo, lança LastOwnerError e nada muda.
-   * A checagem e a escrita são atômicas, mesmo com remoções concorrentes
-   * na mesma organização.
+   * Marca o membership como REMOVED em `now` (a linha nunca é apagada).
+   * Invariante: toda organização mantém pelo menos um OWNER ativo, isto é,
+   * um membership ativo cujo papel tem systemKey OWNER. Se o membership for
+   * o último, lança LastOwnerError e nada muda. A checagem e a escrita são
+   * atômicas, mesmo com remoções concorrentes na mesma organização.
    */
-  abstract remove(membership: Membership): Promise<void>;
+  abstract remove(membership: Membership, now: Date): Promise<void>;
 }

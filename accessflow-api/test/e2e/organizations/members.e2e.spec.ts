@@ -4,6 +4,7 @@ import request from 'supertest';
 import { PrismaService } from '@/shared/infrastructure/database/prisma.service';
 import { FakeTokenVerifier } from '@test/fakes/identity/fake-token-verifier';
 import { createTestApp } from '@test/e2e/setup/create-test-e2e-app';
+import { seedMembership } from '@test/factory/organizations/seed-organization';
 
 const CREATE = `mutation Create($name: String!, $slug: String!) {
   createOrganization(input: { name: $name, slug: $slug }) { id }
@@ -52,9 +53,7 @@ async function createOrganization(ownerSub: string): Promise<string> {
 }
 
 async function addMember(organizationId: string, userId: string) {
-  await prisma.membership.create({
-    data: { organizationId, userId, role: 'MEMBER' },
-  });
+  await seedMembership(prisma, { organizationId, userId });
 }
 
 describe('Membros da organização (e2e)', () => {

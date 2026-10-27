@@ -35,6 +35,9 @@ import { ListMyInvitationsUseCase } from './application/use-cases/list-my-invita
 import { AcceptInvitationUseCase } from './application/use-cases/accept-invitation.use-case';
 import { DeclineInvitationUseCase } from './application/use-cases/decline-invitation.use-case';
 import { InvitationsResolver } from './presentation/graphql/resolvers/invitations.resolver';
+import { RoleRepository } from './domain/repositories/role.repository';
+import { PrismaRoleRepository } from './infrastructure/persistence/prisma-role.repository';
+import { TransactionManager } from '@/shared/application/ports/transaction-manager.port';
 
 @Module({
   imports: [PrismaModule, IdentityModule, ClockModule],
@@ -48,6 +51,7 @@ import { InvitationsResolver } from './presentation/graphql/resolvers/invitation
       useClass: PrismaIntegrationClientRepository,
     },
     { provide: InvitationRepository, useClass: PrismaInvitationRepository },
+    { provide: RoleRepository, useClass: PrismaRoleRepository },
 
     // Adaptador para o módulo Identity
     {
@@ -72,30 +76,62 @@ import { InvitationsResolver } from './presentation/graphql/resolvers/invitation
     // Serviços de aplicação
     {
       provide: OrganizationAccessService,
-      inject: [OrganizationRepository, MembershipRepository],
+      inject: [OrganizationRepository, MembershipRepository, RoleRepository],
       useFactory: (
         organizations: OrganizationRepository,
         memberships: MembershipRepository,
-      ) => new OrganizationAccessService(organizations, memberships),
+        roles: RoleRepository,
+      ) => new OrganizationAccessService(organizations, memberships, roles),
     },
 
     // Casos de uso
     {
       provide: CreateOrganizationUseCase,
-      inject: [OrganizationRepository, UserDirectoryPort],
+      inject: [
+        OrganizationRepository,
+        RoleRepository,
+        MembershipRepository,
+        UserDirectoryPort,
+        TransactionManager,
+        ClockPort,
+      ],
       useFactory: (
         organizations: OrganizationRepository,
+        roles: RoleRepository,
+        memberships: MembershipRepository,
         users: UserDirectoryPort,
-      ) => new CreateOrganizationUseCase(organizations, users),
+        transactions: TransactionManager,
+        clock: ClockPort,
+      ) =>
+        new CreateOrganizationUseCase(
+          organizations,
+          roles,
+          memberships,
+          users,
+          transactions,
+          clock,
+        ),
     },
     {
       provide: ListMyOrganizationsUseCase,
-      inject: [OrganizationRepository, MembershipRepository, UserDirectoryPort],
+      inject: [
+        OrganizationRepository,
+        MembershipRepository,
+        RoleRepository,
+        UserDirectoryPort,
+      ],
       useFactory: (
         organizations: OrganizationRepository,
         memberships: MembershipRepository,
+        roles: RoleRepository,
         users: UserDirectoryPort,
-      ) => new ListMyOrganizationsUseCase(organizations, memberships, users),
+      ) =>
+        new ListMyOrganizationsUseCase(
+          organizations,
+          memberships,
+          roles,
+          users,
+        ),
     },
     {
       provide: GetOrganizationUseCase,
@@ -111,38 +147,66 @@ import { InvitationsResolver } from './presentation/graphql/resolvers/invitation
         OrganizationRepository,
         UserDirectoryPort,
         OrganizationAccessService,
+        TransactionManager,
+        ClockPort,
       ],
       useFactory: (
         organizations: OrganizationRepository,
         users: UserDirectoryPort,
         access: OrganizationAccessService,
-      ) => new UpdateOrganizationUseCase(organizations, users, access),
+        transactions: TransactionManager,
+        clock: ClockPort,
+      ) =>
+        new UpdateOrganizationUseCase(
+          organizations,
+          users,
+          access,
+          transactions,
+          clock,
+        ),
     },
     {
       provide: ListOrganizationMembersUseCase,
       inject: [
         MembershipRepository,
+        RoleRepository,
         UserDirectoryPort,
         OrganizationAccessService,
       ],
       useFactory: (
         memberships: MembershipRepository,
+        roles: RoleRepository,
         users: UserDirectoryPort,
         access: OrganizationAccessService,
-      ) => new ListOrganizationMembersUseCase(memberships, users, access),
+      ) =>
+        new ListOrganizationMembersUseCase(memberships, roles, users, access),
     },
     {
       provide: RemoveMemberUseCase,
       inject: [
+        OrganizationRepository,
         MembershipRepository,
         UserDirectoryPort,
         OrganizationAccessService,
+        TransactionManager,
+        ClockPort,
       ],
       useFactory: (
+        organizations: OrganizationRepository,
         memberships: MembershipRepository,
         users: UserDirectoryPort,
         access: OrganizationAccessService,
-      ) => new RemoveMemberUseCase(memberships, users, access),
+        transactions: TransactionManager,
+        clock: ClockPort,
+      ) =>
+        new RemoveMemberUseCase(
+          organizations,
+          memberships,
+          users,
+          access,
+          transactions,
+          clock,
+        ),
     },
     {
       provide: LeaveOrganizationUseCase,
@@ -150,12 +214,14 @@ import { InvitationsResolver } from './presentation/graphql/resolvers/invitation
         MembershipRepository,
         UserDirectoryPort,
         OrganizationAccessService,
+        ClockPort,
       ],
       useFactory: (
         memberships: MembershipRepository,
         users: UserDirectoryPort,
         access: OrganizationAccessService,
-      ) => new LeaveOrganizationUseCase(memberships, users, access),
+        clock: ClockPort,
+      ) => new LeaveOrganizationUseCase(memberships, users, access, clock),
     },
     {
       provide: CheckMembershipForIntegrationUseCase,
@@ -163,18 +229,21 @@ import { InvitationsResolver } from './presentation/graphql/resolvers/invitation
         IntegrationClientRepository,
         OrganizationRepository,
         MembershipRepository,
+        RoleRepository,
         UserDirectoryPort,
       ],
       useFactory: (
         integrationClients: IntegrationClientRepository,
         organizations: OrganizationRepository,
         memberships: MembershipRepository,
+        roles: RoleRepository,
         users: UserDirectoryPort,
       ) =>
         new CheckMembershipForIntegrationUseCase(
           integrationClients,
           organizations,
           memberships,
+          roles,
           users,
         ),
     },
@@ -182,80 +251,131 @@ import { InvitationsResolver } from './presentation/graphql/resolvers/invitation
     {
       provide: InviteMemberUseCase,
       inject: [
+        OrganizationRepository,
         InvitationRepository,
         MembershipRepository,
+        RoleRepository,
         UserDirectoryPort,
         OrganizationAccessService,
+        TransactionManager,
         ClockPort,
       ],
       useFactory: (
+        organizations: OrganizationRepository,
         invitations: InvitationRepository,
         memberships: MembershipRepository,
+        roles: RoleRepository,
         users: UserDirectoryPort,
         access: OrganizationAccessService,
+        transactions: TransactionManager,
         clock: ClockPort,
       ) =>
-        new InviteMemberUseCase(invitations, memberships, users, access, clock),
+        new InviteMemberUseCase(
+          organizations,
+          invitations,
+          memberships,
+          roles,
+          users,
+          access,
+          transactions,
+          clock,
+        ),
     },
     {
       provide: ListOrganizationInvitationsUseCase,
       inject: [
         InvitationRepository,
+        RoleRepository,
         UserDirectoryPort,
         OrganizationAccessService,
       ],
       useFactory: (
         invitations: InvitationRepository,
+        roles: RoleRepository,
         users: UserDirectoryPort,
         access: OrganizationAccessService,
-      ) => new ListOrganizationInvitationsUseCase(invitations, users, access),
+      ) =>
+        new ListOrganizationInvitationsUseCase(
+          invitations,
+          roles,
+          users,
+          access,
+        ),
     },
     {
       provide: RevokeInvitationUseCase,
       inject: [
+        OrganizationRepository,
         InvitationRepository,
         UserDirectoryPort,
         OrganizationAccessService,
+        TransactionManager,
         ClockPort,
       ],
       useFactory: (
+        organizations: OrganizationRepository,
         invitations: InvitationRepository,
         users: UserDirectoryPort,
         access: OrganizationAccessService,
+        transactions: TransactionManager,
         clock: ClockPort,
-      ) => new RevokeInvitationUseCase(invitations, users, access, clock),
+      ) =>
+        new RevokeInvitationUseCase(
+          organizations,
+          invitations,
+          users,
+          access,
+          transactions,
+          clock,
+        ),
     },
     {
       provide: ListMyInvitationsUseCase,
       inject: [
         InvitationRepository,
         OrganizationRepository,
+        RoleRepository,
         UserDirectoryPort,
         ClockPort,
       ],
       useFactory: (
         invitations: InvitationRepository,
         organizations: OrganizationRepository,
+        roles: RoleRepository,
         users: UserDirectoryPort,
         clock: ClockPort,
       ) =>
-        new ListMyInvitationsUseCase(invitations, organizations, users, clock),
+        new ListMyInvitationsUseCase(
+          invitations,
+          organizations,
+          roles,
+          users,
+          clock,
+        ),
     },
     {
       provide: AcceptInvitationUseCase,
       inject: [
         InvitationRepository,
         OrganizationRepository,
+        RoleRepository,
         UserDirectoryPort,
         ClockPort,
       ],
       useFactory: (
         invitations: InvitationRepository,
         organizations: OrganizationRepository,
+        roles: RoleRepository,
         users: UserDirectoryPort,
         clock: ClockPort,
       ) =>
-        new AcceptInvitationUseCase(invitations, organizations, users, clock),
+        new AcceptInvitationUseCase(
+          invitations,
+          organizations,
+          roles,
+          users,
+          clock,
+        ),
     },
     {
       provide: DeclineInvitationUseCase,

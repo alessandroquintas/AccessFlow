@@ -1,17 +1,5 @@
 import { randomUUID } from 'node:crypto';
 import { InvalidMembershipError } from '../errors/invalid-membership.error';
-import {
-  OrganizationPermission,
-  roleHasPermission,
-} from '../../policies/organization-permission';
-
-export const MembershipRole = {
-  OWNER: 'OWNER',
-  MEMBER: 'MEMBER',
-} as const;
-
-export type MembershipRole =
-  (typeof MembershipRole)[keyof typeof MembershipRole];
 
 export const MembershipStatus = {
   ACTIVE: 'ACTIVE',
@@ -25,7 +13,8 @@ export interface MembershipProps {
   id: string;
   organizationId: string;
   userId: string;
-  role: MembershipRole;
+  /** Papel da mesma organização (garantido pela FK composta). */
+  roleId: string;
   status: MembershipStatus;
   createdAt: Date;
   updatedAt: Date;
@@ -35,7 +24,7 @@ export class Membership {
   private constructor(private props: MembershipProps) {}
 
   static create(
-    input: { organizationId: string; userId: string; role: MembershipRole },
+    input: { organizationId: string; userId: string; roleId: string },
     now: Date = new Date(),
   ): Membership {
     return Membership.restore({
@@ -47,23 +36,8 @@ export class Membership {
     });
   }
 
-  static createOwner(
-    organizationId: string,
-    userId: string,
-    now: Date = new Date(),
-  ): Membership {
-    return Membership.create(
-      {
-        organizationId,
-        userId,
-        role: MembershipRole.OWNER,
-      },
-      now,
-    );
-  }
-
   static restore(props: MembershipProps): Membership {
-    const { id, organizationId, userId } = props;
+    const { id, organizationId, userId, roleId } = props;
 
     if (!id?.trim()) {
       throw new InvalidMembershipError('id é obrigatório.');
@@ -75,6 +49,10 @@ export class Membership {
 
     if (!userId?.trim()) {
       throw new InvalidMembershipError('userId é obrigatório.');
+    }
+
+    if (!roleId?.trim()) {
+      throw new InvalidMembershipError('roleId é obrigatório.');
     }
 
     return new Membership({ ...props });
@@ -89,8 +67,8 @@ export class Membership {
   get userId(): string {
     return this.props.userId;
   }
-  get role(): MembershipRole {
-    return this.props.role;
+  get roleId(): string {
+    return this.props.roleId;
   }
   get status(): MembershipStatus {
     return this.props.status;
@@ -106,10 +84,6 @@ export class Membership {
     return this.props.status === MembershipStatus.ACTIVE;
   }
 
-  isOwner(): boolean {
-    return this.isActive() && this.props.role === MembershipRole.OWNER;
-  }
-
   /** Idempotente: remover um membership já removido não muda nada. */
   remove(now: Date = new Date()): void {
     if (!this.isActive()) return;
@@ -121,7 +95,7 @@ export class Membership {
   }
 
   /** Volta um membership REMOVED para ACTIVE com o papel informado. */
-  reactivate(role: MembershipRole, now: Date): void {
+  reactivate(roleId: string, now: Date): void {
     if (this.isActive()) {
       throw new InvalidMembershipError(
         'Só um membership removido pode ser reativado.',
@@ -129,13 +103,9 @@ export class Membership {
     }
     this.props = {
       ...this.props,
-      role,
+      roleId,
       status: MembershipStatus.ACTIVE,
       updatedAt: now,
     };
-  }
-
-  can(permission: OrganizationPermission): boolean {
-    return this.isActive() && roleHasPermission(this.props.role, permission);
   }
 }

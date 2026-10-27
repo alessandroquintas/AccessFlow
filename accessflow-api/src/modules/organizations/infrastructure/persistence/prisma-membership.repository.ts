@@ -1,7 +1,7 @@
 import { Injectable } from '@nestjs/common';
 import {
-  MembershipRole as PrismaMembershipRole,
   MembershipStatus as PrismaMembershipStatus,
+  RoleSystemKey as PrismaRoleSystemKey,
 } from '@prisma/client';
 import { TransactionManager } from '@/shared/application/ports/transaction-manager.port';
 import { PrismaClientProvider } from '@/shared/infrastructure/database/prisma-client.provider';
@@ -77,26 +77,38 @@ export class PrismaMembershipRepository extends MembershipRepository {
     };
   }
 
-  async remove(membership: Membership): Promise<void> {
+  async create(membership: Membership): Promise<void> {
+    await this.clients.current().membership.create({
+      data: PrismaMembershipMapper.toPersistence(membership),
+    });
+  }
+
+  async remove(membership: Membership, now: Date): Promise<void> {
     await this.transactions.run(async () => {
       const tx = this.clients.current();
       // Trava a organização: remoções concorrentes nela esperam aqui e só
       // contam os OWNERs depois que a anterior terminar.
       await tx.$queryRaw`SELECT id FROM organizations WHERE id = ${membership.organizationId}::uuid FOR UPDATE`;
 
-      if (membership.isOwner()) {
+      // OWNER é o membership ativo cujo papel tem systemKey OWNER.
+      const owner = {
+        organizationId: membership.organizationId,
+        status: PrismaMembershipStatus.ACTIVE,
+        role: { systemKey: PrismaRoleSystemKey.OWNER },
+      };
+      const isOwner =
+        membership.isActive() &&
+        (await tx.membership.count({
+          where: { ...owner, id: membership.id },
+        })) > 0;
+      if (isOwner) {
         const otherOwners = await tx.membership.count({
-          where: {
-            organizationId: membership.organizationId,
-            role: PrismaMembershipRole.OWNER,
-            status: PrismaMembershipStatus.ACTIVE,
-            id: { not: membership.id },
-          },
+          where: { ...owner, id: { not: membership.id } },
         });
         if (otherOwners === 0) throw new LastOwnerError();
       }
 
-      membership.remove();
+      membership.remove(now);
       const { status, updatedAt } =
         PrismaMembershipMapper.toPersistence(membership);
 

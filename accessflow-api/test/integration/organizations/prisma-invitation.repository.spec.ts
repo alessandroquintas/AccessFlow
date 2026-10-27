@@ -10,12 +10,11 @@ import {
 import { PrismaService } from '@/shared/infrastructure/database/prisma.service';
 import { PrismaClientProvider } from '@/shared/infrastructure/database/prisma-client.provider';
 import { PrismaTransactionManager } from '@/shared/infrastructure/database/prisma-transaction-manager';
-import { Organization } from '@/modules/organizations/domain/entities/organization.entity';
 import {
   Membership,
-  MembershipRole,
   MembershipStatus,
 } from '@/modules/organizations/domain/entities/membership.entity';
+import { RoleSystemKey } from '@/modules/organizations/domain/entities/role.entity';
 import {
   Invitation,
   InvitationStatus,
@@ -27,9 +26,14 @@ import { PrismaInvitationRepository } from '@/modules/organizations/infrastructu
 import { PrismaInvitationMapper } from '@/modules/organizations/infrastructure/persistence/mappers/prisma-invitation.mapper';
 import { PrismaMembershipMapper } from '@/modules/organizations/infrastructure/persistence/mappers/prisma-membership.mapper';
 import { PrismaMembershipRepository } from '@/modules/organizations/infrastructure/persistence/prisma-membership.repository';
+import { PrismaRoleRepository } from '@/modules/organizations/infrastructure/persistence/prisma-role.repository';
 import { AcceptInvitationUseCase } from '@/modules/organizations/application/use-cases/accept-invitation.use-case';
 import { FakeUserDirectory } from '@test/fakes/organizations/fake-user-directory';
 import { FixedClock } from '@test/fakes/shared/fixed-clock';
+import {
+  SeededOrganization,
+  seedOrganization,
+} from '@test/factory/organizations/seed-organization';
 
 const DAY = 24 * 60 * 60 * 1000;
 const NOW = new Date('2026-03-01T12:00:00.000Z');
@@ -41,6 +45,8 @@ let clients: PrismaClientProvider;
 let transactions: PrismaTransactionManager;
 let organizations: PrismaOrganizationRepository;
 let invitations: PrismaInvitationRepository;
+/** Papéis de sistema de cada organização criada no teste. */
+const roleIdsByOrganization = new Map<string, Record<RoleSystemKey, string>>();
 
 async function createUser(
   cognitoSub: string,
@@ -50,11 +56,12 @@ async function createUser(
 }
 
 async function createOrganizationWithOwner(slug: string, ownerId: string) {
-  const organization = Organization.create({ name: 'Acme', slug });
-  await organizations.createWithOwner(
-    organization,
-    Membership.createOwner(organization.id, ownerId),
-  );
+  const organization = await seedOrganization(prisma, {
+    slug,
+    name: 'Acme',
+    owner: ownerId,
+  });
+  roleIdsByOrganization.set(organization.id, organization.roleIds);
   return organization;
 }
 
@@ -63,10 +70,11 @@ function makeInvitation(
   invitedByUserId: string,
   email: string,
   now = NOW,
-  role: MembershipRole = MembershipRole.MEMBER,
+  role: RoleSystemKey = RoleSystemKey.MEMBER,
 ) {
+  const roleId = roleIdsByOrganization.get(organizationId)![role];
   return Invitation.create(
-    { organizationId, email, role, invitedByUserId },
+    { organizationId, email, roleId, invitedByUserId },
     now,
   );
 }
@@ -90,14 +98,14 @@ async function warmPool() {
 
 describe('PrismaInvitationRepository (integração)', () => {
   let ana: { id: string };
-  let acme: Organization;
+  let acme: SeededOrganization;
 
   beforeAll(async () => {
     prisma = new PrismaService();
     await prisma.$connect();
     clients = new PrismaClientProvider(prisma);
     transactions = new PrismaTransactionManager(prisma, clients);
-    organizations = new PrismaOrganizationRepository(clients, transactions);
+    organizations = new PrismaOrganizationRepository(clients);
     invitations = new PrismaInvitationRepository(clients, transactions);
   });
 
@@ -144,7 +152,7 @@ describe('PrismaInvitationRepository (integração)', () => {
           carla.id,
           'bruno@example.com',
           at(2 * DAY),
-          MembershipRole.OWNER,
+          RoleSystemKey.OWNER,
         ),
         limitAt(at(2 * DAY)),
       );
@@ -152,9 +160,10 @@ describe('PrismaInvitationRepository (integração)', () => {
       expect(renewed.id).toBe(first.id);
       const record = await prisma.invitation.findUniqueOrThrow({
         where: { id: first.id },
+        include: { role: true },
       });
       expect(record).toMatchObject({
-        role: 'OWNER',
+        role: { systemKey: 'OWNER' },
         invitedByUserId: carla.id,
         expiresAt: at(9 * DAY),
         updatedAt: at(2 * DAY),
@@ -328,7 +337,7 @@ describe('PrismaInvitationRepository (integração)', () => {
             ana.id,
             'bruno@example.com',
             NOW,
-            MembershipRole.OWNER,
+            RoleSystemKey.OWNER,
           ),
           limitAt(),
         ),
@@ -498,11 +507,11 @@ describe('PrismaInvitationRepository (integração)', () => {
   describe('accept', () => {
     async function addMembership(
       userId: string,
-      role: MembershipRole,
+      role: RoleSystemKey,
       removedAt?: Date,
     ) {
       const membership = Membership.create(
-        { organizationId: acme.id, userId, role },
+        { organizationId: acme.id, userId, roleId: acme.roleIds[role] },
         at(-10 * DAY),
       );
       if (removedAt) membership.remove(removedAt);
@@ -515,6 +524,7 @@ describe('PrismaInvitationRepository (integração)', () => {
     async function membershipsOf(userId: string) {
       return prisma.membership.findMany({
         where: { organizationId: acme.id, userId },
+        include: { role: true },
       });
     }
 
@@ -532,7 +542,7 @@ describe('PrismaInvitationRepository (integração)', () => {
         ana.id,
         'sub-bruno@example.com',
         NOW,
-        MembershipRole.OWNER,
+        RoleSystemKey.OWNER,
       );
       await insert(invitation);
 
@@ -544,11 +554,11 @@ describe('PrismaInvitationRepository (integração)', () => {
 
       expect(membership).toMatchObject({
         userId: bruno.id,
-        role: MembershipRole.OWNER,
+        roleId: acme.roleIds.OWNER,
         createdAt: at(DAY),
       });
       expect(await membershipsOf(bruno.id)).toMatchObject([
-        { id: membership.id, role: 'OWNER', status: 'ACTIVE' },
+        { id: membership.id, role: { systemKey: 'OWNER' }, status: 'ACTIVE' },
       ]);
       expect(await statusOf(invitation)).toBe('ACCEPTED');
     });
@@ -557,7 +567,7 @@ describe('PrismaInvitationRepository (integração)', () => {
       const bruno = await createUser('sub-bruno');
       const old = await addMembership(
         bruno.id,
-        MembershipRole.OWNER,
+        RoleSystemKey.OWNER,
         at(-5 * DAY),
       );
       const invitation = makeInvitation(
@@ -577,7 +587,7 @@ describe('PrismaInvitationRepository (integração)', () => {
       expect(await membershipsOf(bruno.id)).toMatchObject([
         {
           id: old.id,
-          role: 'MEMBER',
+          role: { systemKey: 'MEMBER' },
           status: 'ACTIVE',
           updatedAt: at(DAY),
           createdAt: at(-10 * DAY),
@@ -587,13 +597,13 @@ describe('PrismaInvitationRepository (integração)', () => {
 
     it('membership ACTIVE: mantém papel e status e consome o convite', async () => {
       const bruno = await createUser('sub-bruno');
-      const current = await addMembership(bruno.id, MembershipRole.MEMBER);
+      const current = await addMembership(bruno.id, RoleSystemKey.MEMBER);
       const invitation = makeInvitation(
         acme.id,
         ana.id,
         'sub-bruno@example.com',
         NOW,
-        MembershipRole.OWNER,
+        RoleSystemKey.OWNER,
       );
       await insert(invitation);
 
@@ -603,11 +613,11 @@ describe('PrismaInvitationRepository (integração)', () => {
         now: at(DAY),
       });
 
-      expect(membership.role).toBe(MembershipRole.MEMBER);
+      expect(membership.roleId).toBe(acme.roleIds.MEMBER);
       expect(await membershipsOf(bruno.id)).toMatchObject([
         {
           id: current.id,
-          role: 'MEMBER',
+          role: { systemKey: 'MEMBER' },
           status: 'ACTIVE',
           updatedAt: at(-10 * DAY),
         },
@@ -617,7 +627,7 @@ describe('PrismaInvitationRepository (integração)', () => {
 
     it('membership removido depois que o caso de uso leu o estado ativo: reativa com o papel do convite', async () => {
       const bruno = await createUser('sub-bruno');
-      const current = await addMembership(bruno.id, MembershipRole.OWNER);
+      const current = await addMembership(bruno.id, RoleSystemKey.OWNER);
       const invitation = makeInvitation(
         acme.id,
         ana.id,
@@ -631,6 +641,7 @@ describe('PrismaInvitationRepository (integração)', () => {
       const sut = new AcceptInvitationUseCase(
         invitations,
         organizations,
+        new PrismaRoleRepository(clients, transactions),
         users,
         new FixedClock(at(DAY)),
       );
@@ -661,13 +672,13 @@ describe('PrismaInvitationRepository (integração)', () => {
 
       expect(result.membership).toMatchObject({
         id: current.id,
-        role: MembershipRole.MEMBER,
+        roleId: acme.roleIds.MEMBER,
         status: MembershipStatus.ACTIVE,
       });
       expect(await membershipsOf(bruno.id)).toMatchObject([
         {
           id: current.id,
-          role: 'MEMBER',
+          role: { systemKey: 'MEMBER' },
           status: 'ACTIVE',
           updatedAt: at(DAY),
         },

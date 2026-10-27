@@ -3,7 +3,6 @@ import {
   Invitation,
   InvitationStatus,
 } from '@/modules/organizations/domain/entities/invitation.entity';
-import { MembershipRole } from '@/modules/organizations/domain/entities/membership.entity';
 import { InvitationNotFoundError } from '@/modules/organizations/domain/errors/invitation-not-found.error';
 import { InvalidInvitationError } from '@/modules/organizations/domain/errors/invalid-invitation.error';
 import { InvalidEmailError } from '@/shared/domain/errors/invalid-email.error';
@@ -17,7 +16,7 @@ function makeInvitation(email = 'Bruno@Example.com') {
     {
       organizationId: 'org-1',
       email,
-      role: MembershipRole.MEMBER,
+      roleId: 'role-member',
       invitedByUserId: 'user-ana',
     },
     CREATED_AT,
@@ -39,7 +38,7 @@ describe('Invitation', () => {
     expect(() => makeInvitation('bruno@')).toThrow(InvalidEmailError);
   });
 
-  it.each(['id', 'organizationId', 'invitedByUserId'] as const)(
+  it.each(['id', 'organizationId', 'roleId', 'invitedByUserId'] as const)(
     'restore exige %s',
     (field) => {
       const invitation = makeInvitation();
@@ -49,7 +48,7 @@ describe('Invitation', () => {
           id: invitation.id,
           organizationId: invitation.organizationId,
           email: invitation.email,
-          role: invitation.role,
+          roleId: invitation.roleId,
           status: invitation.status,
           invitedByUserId: invitation.invitedByUserId,
           expiresAt: invitation.expiresAt,
@@ -92,11 +91,11 @@ describe('Invitation', () => {
       const invitation = makeInvitation();
 
       invitation.renew(
-        { role: MembershipRole.OWNER, invitedByUserId: 'user-carla' },
+        { roleId: 'role-owner', invitedByUserId: 'user-carla' },
         at(2 * DAY),
       );
 
-      expect(invitation.role).toBe(MembershipRole.OWNER);
+      expect(invitation.roleId).toBe('role-owner');
       expect(invitation.invitedByUserId).toBe('user-carla');
       expect(invitation.expiresAt).toEqual(at(9 * DAY));
       expect(invitation.updatedAt).toEqual(at(2 * DAY));
@@ -107,7 +106,7 @@ describe('Invitation', () => {
       const invitation = makeInvitation();
 
       invitation.renew(
-        { role: MembershipRole.MEMBER, invitedByUserId: 'user-ana' },
+        { roleId: 'role-member', invitedByUserId: 'user-ana' },
         at(10 * DAY),
       );
 
@@ -121,7 +120,7 @@ describe('Invitation', () => {
 
       expect(() =>
         invitation.renew(
-          { role: MembershipRole.MEMBER, invitedByUserId: 'user-ana' },
+          { roleId: 'role-member', invitedByUserId: 'user-ana' },
           at(2 * DAY),
         ),
       ).toThrow(InvitationNotFoundError);

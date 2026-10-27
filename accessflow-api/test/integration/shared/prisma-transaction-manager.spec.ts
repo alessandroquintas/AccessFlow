@@ -7,13 +7,18 @@ import { User } from '@/modules/identity/domain/entities/user.entity';
 import { PrismaUserRepository } from '@/modules/identity/infrastructure/persistence/prisma-user.repository';
 import { Organization } from '@/modules/organizations/domain/entities/organization.entity';
 import { Membership } from '@/modules/organizations/domain/entities/membership.entity';
+import { Role } from '@/modules/organizations/domain/entities/role.entity';
 import { PrismaOrganizationRepository } from '@/modules/organizations/infrastructure/persistence/prisma-organization.repository';
+import { PrismaRoleRepository } from '@/modules/organizations/infrastructure/persistence/prisma-role.repository';
+import { PrismaMembershipRepository } from '@/modules/organizations/infrastructure/persistence/prisma-membership.repository';
 
 let prisma: PrismaService;
 let clients: PrismaClientProvider;
 let transactions: PrismaTransactionManager;
 let users: PrismaUserRepository;
 let organizations: PrismaOrganizationRepository;
+let roles: PrismaRoleRepository;
+let memberships: PrismaMembershipRepository;
 
 function makeUser(cognitoSub: string) {
   return User.create({
@@ -21,6 +26,24 @@ function makeUser(cognitoSub: string) {
     name: 'Usuário',
     email: `${cognitoSub}@example.com`,
   });
+}
+
+/** Organização, papéis padrão e o OWNER: escritas em três repositórios. */
+async function createOrganizationWithOwner(
+  organization: Organization,
+  ownerId: string,
+) {
+  const defaults = Role.createDefaults(organization.id, new Date());
+  await organizations.create(organization);
+  // createDefaults abre a própria transação: aqui ela é reaproveitada.
+  await roles.createDefaults(defaults);
+  await memberships.create(
+    Membership.create({
+      organizationId: organization.id,
+      userId: ownerId,
+      roleId: defaults.owner.id,
+    }),
+  );
 }
 
 async function countRows() {
@@ -43,7 +66,9 @@ describe('PrismaTransactionManager (integração)', () => {
     clients = new PrismaClientProvider(prisma);
     transactions = new PrismaTransactionManager(prisma, clients);
     users = new PrismaUserRepository(clients);
-    organizations = new PrismaOrganizationRepository(clients, transactions);
+    organizations = new PrismaOrganizationRepository(clients);
+    roles = new PrismaRoleRepository(clients, transactions);
+    memberships = new PrismaMembershipRepository(clients, transactions);
   });
 
   afterAll(async () => {
@@ -61,11 +86,7 @@ describe('PrismaTransactionManager (integração)', () => {
     await expect(
       transactions.run(async () => {
         await users.create(ana);
-        // createWithOwner abre a própria transação: aqui ela é reaproveitada.
-        await organizations.createWithOwner(
-          acme,
-          Membership.createOwner(acme.id, ana.id),
-        );
+        await createOrganizationWithOwner(acme, ana.id);
         throw new Error('falha depois das escritas');
       }),
     ).rejects.toThrow('falha depois das escritas');
@@ -83,10 +104,7 @@ describe('PrismaTransactionManager (integração)', () => {
 
     await transactions.run(async () => {
       await users.create(ana);
-      await organizations.createWithOwner(
-        acme,
-        Membership.createOwner(acme.id, ana.id),
-      );
+      await createOrganizationWithOwner(acme, ana.id);
     });
 
     expect(await countRows()).toEqual({

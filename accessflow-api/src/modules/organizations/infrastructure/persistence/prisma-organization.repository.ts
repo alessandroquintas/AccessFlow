@@ -1,20 +1,15 @@
 import { Injectable } from '@nestjs/common';
-import { TransactionManager } from '@/shared/application/ports/transaction-manager.port';
 import { PrismaClientProvider } from '@/shared/infrastructure/database/prisma-client.provider';
 import { isUniqueViolation } from '@/shared/infrastructure/database/prisma-errors';
+import { isUuid } from '@/shared/domain/uuid';
 import { Organization } from '@/modules/organizations/domain/entities/organization.entity';
-import { Membership } from '@/modules/organizations/domain/entities/membership.entity';
 import { OrganizationRepository } from '@/modules/organizations/domain/repositories/organization.repository';
 import { SlugAlreadyTakenError } from '@/modules/organizations/domain/errors/slug-already-taken.error';
 import { PrismaOrganizationMapper } from './mappers/prisma-organization.mapper';
-import { PrismaMembershipMapper } from './mappers/prisma-membership.mapper';
 
 @Injectable()
 export class PrismaOrganizationRepository extends OrganizationRepository {
-  constructor(
-    private readonly clients: PrismaClientProvider,
-    private readonly transactions: TransactionManager,
-  ) {
+  constructor(private readonly clients: PrismaClientProvider) {
     super();
   }
 
@@ -41,19 +36,10 @@ export class PrismaOrganizationRepository extends OrganizationRepository {
     return records.map(PrismaOrganizationMapper.toDomain);
   }
 
-  async createWithOwner(
-    organization: Organization,
-    owner: Membership,
-  ): Promise<void> {
+  async create(organization: Organization): Promise<void> {
     try {
-      await this.transactions.run(async () => {
-        const db = this.clients.current();
-        await db.organization.create({
-          data: PrismaOrganizationMapper.toPersistence(organization),
-        });
-        await db.membership.create({
-          data: PrismaMembershipMapper.toPersistence(owner),
-        });
+      await this.clients.current().organization.create({
+        data: PrismaOrganizationMapper.toPersistence(organization),
       });
     } catch (error) {
       if (isUniqueViolation(error, 'slug')) throw new SlugAlreadyTakenError();
@@ -73,5 +59,12 @@ export class PrismaOrganizationRepository extends OrganizationRepository {
       },
       data: { name, status, updatedAt },
     });
+  }
+
+  async lock(id: string): Promise<void> {
+    // Sem a checagem, o cast ::uuid de um id malformado viraria erro 500.
+    if (!isUuid(id)) return;
+    await this.clients.current()
+      .$queryRaw`SELECT id FROM organizations WHERE id = ${id}::uuid FOR UPDATE`;
   }
 }

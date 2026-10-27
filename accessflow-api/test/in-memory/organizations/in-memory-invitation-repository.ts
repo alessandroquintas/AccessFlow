@@ -33,7 +33,7 @@ function copy(invitation: Invitation): Invitation {
     id: invitation.id,
     organizationId: invitation.organizationId,
     email: invitation.email,
-    role: invitation.role,
+    roleId: invitation.roleId,
     status: invitation.status,
     invitedByUserId: invitation.invitedByUserId,
     expiresAt: invitation.expiresAt,
@@ -87,7 +87,7 @@ export class InMemoryInvitationRepository extends InvitationRepository {
     if (existing) {
       existing.renew(
         {
-          role: candidate.role,
+          roleId: candidate.roleId,
           invitedByUserId: candidate.invitedByUserId,
         },
         now,
@@ -148,7 +148,7 @@ export class InMemoryInvitationRepository extends InvitationRepository {
         {
           organizationId: invitation.organizationId,
           userId,
-          role: invitation.role,
+          roleId: invitation.roleId,
         },
         now,
       );
@@ -157,7 +157,7 @@ export class InMemoryInvitationRepository extends InvitationRepository {
     }
 
     // Mesma regra do Prisma: ativo fica como está, REMOVED é reativado.
-    if (!existing.isActive()) existing.reactivate(invitation.role, now);
+    if (!existing.isActive()) existing.reactivate(invitation.roleId, now);
     return existing;
   }
 

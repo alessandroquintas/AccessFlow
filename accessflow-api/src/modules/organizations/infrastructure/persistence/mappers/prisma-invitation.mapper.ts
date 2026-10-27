@@ -1,24 +1,12 @@
 import {
   Prisma,
   InvitationStatus as PrismaInvitationStatus,
-  MembershipRole as PrismaMembershipRole,
   type Invitation as PrismaInvitation,
 } from '@prisma/client';
 import {
   Invitation,
   InvitationStatus,
 } from '@/modules/organizations/domain/entities/invitation.entity';
-import { MembershipRole } from '@/modules/organizations/domain/entities/membership.entity';
-
-const ROLE_TO_DOMAIN: Record<PrismaMembershipRole, MembershipRole> = {
-  OWNER: MembershipRole.OWNER,
-  MEMBER: MembershipRole.MEMBER,
-};
-
-const ROLE_TO_PERSISTENCE: Record<MembershipRole, PrismaMembershipRole> = {
-  OWNER: PrismaMembershipRole.OWNER,
-  MEMBER: PrismaMembershipRole.MEMBER,
-};
 
 const STATUS_TO_DOMAIN: Record<PrismaInvitationStatus, InvitationStatus> = {
   PENDING: InvitationStatus.PENDING,
@@ -41,7 +29,7 @@ export class PrismaInvitationMapper {
       id: record.id,
       organizationId: record.organizationId,
       email: record.email,
-      role: ROLE_TO_DOMAIN[record.role],
+      roleId: record.roleId,
       status: STATUS_TO_DOMAIN[record.status],
       invitedByUserId: record.invitedByUserId,
       expiresAt: record.expiresAt,
@@ -57,7 +45,7 @@ export class PrismaInvitationMapper {
       id: invitation.id,
       organizationId: invitation.organizationId,
       email: invitation.email,
-      role: ROLE_TO_PERSISTENCE[invitation.role],
+      roleId: invitation.roleId,
       status: STATUS_TO_PERSISTENCE[invitation.status],
       invitedByUserId: invitation.invitedByUserId,
       expiresAt: invitation.expiresAt,

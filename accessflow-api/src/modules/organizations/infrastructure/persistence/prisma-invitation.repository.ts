@@ -55,19 +55,19 @@ export class PrismaInvitationRepository extends InvitationRepository {
         const existing = PrismaInvitationMapper.toDomain(record);
         existing.renew(
           {
-            role: candidate.role,
+            roleId: candidate.roleId,
             invitedByUserId: candidate.invitedByUserId,
           },
           now,
         );
-        const { role, invitedByUserId, expiresAt, updatedAt } =
+        const { roleId, invitedByUserId, expiresAt, updatedAt } =
           PrismaInvitationMapper.toPersistence(existing);
 
         // Condicional: o aceite e a recusa não travam a organização, só o
         // convite. Se ele foi respondido depois da busca, cria-se um novo.
         const { count } = await tx.invitation.updateMany({
           where: { id: existing.id, status: PrismaInvitationStatus.PENDING },
-          data: { role, invitedByUserId, expiresAt, updatedAt },
+          data: { roleId, invitedByUserId, expiresAt, updatedAt },
         });
         if (count === 1) return existing;
       }
@@ -168,7 +168,7 @@ export class PrismaInvitationRepository extends InvitationRepository {
       let membership: Membership;
       if (!record) {
         membership = Membership.create(
-          { organizationId, userId, role: invitation.role },
+          { organizationId, userId, roleId: invitation.roleId },
           now,
         );
         await tx.membership.create({
@@ -178,12 +178,12 @@ export class PrismaInvitationRepository extends InvitationRepository {
         membership = PrismaMembershipMapper.toDomain(record);
         // Já é membro ativo: o convite é consumido e o papel não muda.
         if (!membership.isActive()) {
-          membership.reactivate(invitation.role, now);
-          const { role, status, updatedAt } =
+          membership.reactivate(invitation.roleId, now);
+          const { roleId, status, updatedAt } =
             PrismaMembershipMapper.toPersistence(membership);
           await tx.membership.update({
             where: { id: membership.id },
-            data: { role, status, updatedAt },
+            data: { roleId, status, updatedAt },
           });
         }
       }

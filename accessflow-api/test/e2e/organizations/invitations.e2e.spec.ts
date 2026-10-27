@@ -7,6 +7,7 @@ import { FakeIdentityProfileProvider } from '@test/fakes/identity/fake-identity-
 import { FakeMachineTokenVerifier } from '@test/fakes/identity/fake-machine-token-verifier';
 import { FixedClock } from '@test/fakes/shared/fixed-clock';
 import { createTestApp } from '@test/e2e/setup/create-test-e2e-app';
+import { seedMembership } from '@test/factory/organizations/seed-organization';
 
 const DAY = 24 * 60 * 60 * 1000;
 
@@ -311,9 +312,7 @@ describe('Convites (e2e)', () => {
 
   it('MEMBER não convida nem lista os convites (FORBIDDEN)', async () => {
     const bruno = await provision('bruno', 'Bruno', 'bruno@example.com');
-    await prisma.membership.create({
-      data: { organizationId: orgId, userId: bruno.id, role: 'MEMBER' },
-    });
+    await seedMembership(prisma, { organizationId: orgId, userId: bruno.id });
     const forbidden = {
       code: 'FORBIDDEN',
       reason: 'ORGANIZATION_PERMISSION_DENIED',
@@ -335,9 +334,7 @@ describe('Convites (e2e)', () => {
     ['a si mesmo', 'ana@example.com'],
   ])('convidar %s: CONFLICT/ALREADY_MEMBER', async (_cenario, email) => {
     const bruno = await provision('bruno', 'Bruno', 'bruno@example.com');
-    await prisma.membership.create({
-      data: { organizationId: orgId, userId: bruno.id, role: 'MEMBER' },
-    });
+    await seedMembership(prisma, { organizationId: orgId, userId: bruno.id });
 
     expectError(await invite(email), {
       code: 'CONFLICT',

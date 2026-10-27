@@ -4,6 +4,7 @@ import request from 'supertest';
 import { PrismaService } from '@/shared/infrastructure/database/prisma.service';
 import { FakeTokenVerifier } from '@test/fakes/identity/fake-token-verifier';
 import { createTestApp } from '@test/e2e/setup/create-test-e2e-app';
+import { seedMembership } from '@test/factory/organizations/seed-organization';
 
 const CREATE = `mutation Create($name: String!, $slug: String!) {
   createOrganization(input: { name: $name, slug: $slug }) { id name slug status viewerRole }
@@ -77,8 +78,9 @@ describe('Organizations (e2e)', () => {
 
       const membership = await prisma.membership.findFirst({
         where: { userId: ana.id },
+        include: { role: true },
       });
-      expect(membership?.role).toBe('OWNER');
+      expect(membership?.role.systemKey).toBe('OWNER');
     });
 
     it('recusa slug em uso com CONFLICT', async () => {
@@ -247,9 +249,7 @@ describe('Organizations (e2e)', () => {
       );
       const id = created.body.data.createOrganization.id;
 
-      await prisma.membership.create({
-        data: { organizationId: id, userId: bruno.id, role: 'MEMBER' },
-      });
+      await seedMembership(prisma, { organizationId: id, userId: bruno.id });
 
       return id;
     }

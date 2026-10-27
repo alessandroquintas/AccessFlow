@@ -2,7 +2,6 @@ import { randomUUID } from 'node:crypto';
 import { Email } from '@/shared/domain/value-objects/email.vo';
 import { InvalidInvitationError } from '../errors/invalid-invitation.error';
 import { InvitationNotFoundError } from '../errors/invitation-not-found.error';
-import { MembershipRole } from './membership.entity';
 
 export const InvitationStatus = {
   PENDING: 'PENDING',
@@ -18,7 +17,8 @@ export interface InvitationProps {
   id: string;
   organizationId: string;
   email: string;
-  role: MembershipRole;
+  /** Papel ao aceitar, da mesma organização (garantido pela FK composta). */
+  roleId: string;
   status: InvitationStatus;
   invitedByUserId: string;
   expiresAt: Date;
@@ -44,7 +44,7 @@ export class Invitation {
     input: {
       organizationId: string;
       email: string;
-      role: MembershipRole;
+      roleId: string;
       invitedByUserId: string;
     },
     now: Date,
@@ -60,7 +60,7 @@ export class Invitation {
   }
 
   static restore(props: InvitationProps): Invitation {
-    const { id, organizationId, invitedByUserId } = props;
+    const { id, organizationId, roleId, invitedByUserId } = props;
 
     if (!id?.trim()) {
       throw new InvalidInvitationError('id é obrigatório.');
@@ -68,6 +68,10 @@ export class Invitation {
 
     if (!organizationId?.trim()) {
       throw new InvalidInvitationError('organizationId é obrigatório.');
+    }
+
+    if (!roleId?.trim()) {
+      throw new InvalidInvitationError('roleId é obrigatório.');
     }
 
     if (!invitedByUserId?.trim()) {
@@ -86,8 +90,8 @@ export class Invitation {
   get email(): string {
     return this.state.email.value;
   }
-  get role(): MembershipRole {
-    return this.state.role;
+  get roleId(): string {
+    return this.state.roleId;
   }
   get status(): InvitationStatus {
     return this.state.status;
@@ -121,14 +125,11 @@ export class Invitation {
   }
 
   /** Reaproveita o convite PENDING, mesmo expirado, com novo prazo. */
-  renew(
-    input: { role: MembershipRole; invitedByUserId: string },
-    now: Date,
-  ): void {
+  renew(input: { roleId: string; invitedByUserId: string }, now: Date): void {
     this.requireStatusPending();
     this.state = {
       ...this.state,
-      role: input.role,
+      roleId: input.roleId,
       invitedByUserId: input.invitedByUserId,
       expiresAt: Invitation.expirationFrom(now),
       updatedAt: now,

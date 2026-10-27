@@ -1,9 +1,7 @@
 import { beforeEach, describe, expect, it } from 'vitest';
 import { Organization } from '@/modules/organizations/domain/entities/organization.entity';
-import {
-  Membership,
-  MembershipRole,
-} from '@/modules/organizations/domain/entities/membership.entity';
+import { Membership } from '@/modules/organizations/domain/entities/membership.entity';
+import { Role } from '@/modules/organizations/domain/entities/role.entity';
 
 import { OrganizationAccessService } from '@/modules/organizations/application/services/organization-access.service';
 import { UpdateOrganizationUseCase } from '@/modules/organizations/application/use-cases/update-organization.use-case';
@@ -12,11 +10,11 @@ import { OrganizationPermissionDeniedError } from '@/modules/organizations/domai
 import { InvalidOrganizationError } from '@/modules/organizations/domain/errors/invalid-organization.error';
 import { InMemoryOrganizationRepository } from '@test/in-memory/organizations/in-memory-organization-repository';
 import { InMemoryMembershipRepository } from '@test/in-memory/organizations/in-memory-membership-repository';
+import { InMemoryRoleRepository } from '@test/in-memory/organizations/in-memory-role-repository';
 import { FakeUserDirectory } from '@test/fakes/organizations/fake-user-directory';
-import {
-  OrganizationPermission,
-  roleHasPermission,
-} from '@/modules/organizations/policies/organization-permission';
+import { FakeTransactionManager } from '@test/fakes/shared/fake-transaction-manager';
+import { FixedClock } from '@test/fakes/shared/fixed-clock';
+import { OrganizationPermission } from '@/modules/organizations/policies/organization-permission';
 
 const OWNER = { sub: 'sub-owner', id: '11111111-1111-4111-8111-111111111111' };
 const MEMBER = {
@@ -28,6 +26,7 @@ const OUTSIDER = {
   id: '33333333-3333-4333-8333-333333333333',
 };
 
+let roles: InMemoryRoleRepository;
 let memberships: InMemoryMembershipRepository;
 let organizations: InMemoryOrganizationRepository;
 let access: OrganizationAccessService;
@@ -35,46 +34,33 @@ let updateOrganization: UpdateOrganizationUseCase;
 let organization: Organization;
 
 describe('Política de permissões', () => {
+  const defaults = Role.createDefaults('org-1', new Date());
+
   it('OWNER tem todas as permissões', () => {
     for (const permission of Object.values(OrganizationPermission)) {
-      expect(roleHasPermission(MembershipRole.OWNER, permission)).toBe(true);
+      expect(defaults.owner.grants(permission)).toBe(true);
     }
   });
 
   it('MEMBER só lê membros', () => {
+    expect(defaults.member.grants(OrganizationPermission.MEMBERS_READ)).toBe(
+      true,
+    );
     expect(
-      roleHasPermission(
-        MembershipRole.MEMBER,
-        OrganizationPermission.MEMBERS_READ,
-      ),
-    ).toBe(true);
-    expect(
-      roleHasPermission(
-        MembershipRole.MEMBER,
-        OrganizationPermission.ORGANIZATIONS_UPDATE,
-      ),
+      defaults.member.grants(OrganizationPermission.ORGANIZATIONS_UPDATE),
     ).toBe(false);
-    expect(
-      roleHasPermission(
-        MembershipRole.MEMBER,
-        OrganizationPermission.MEMBERS_REMOVE,
-      ),
-    ).toBe(false);
-  });
-
-  it('membership removido não tem permissão nenhuma', () => {
-    const membership = Membership.createOwner('org-1', 'user-1');
-    membership.remove();
-
-    expect(membership.can(OrganizationPermission.MEMBERS_READ)).toBe(false);
+    expect(defaults.member.grants(OrganizationPermission.MEMBERS_REMOVE)).toBe(
+      false,
+    );
   });
 });
 
 describe('Acesso a organizações', () => {
   beforeEach(async () => {
-    memberships = new InMemoryMembershipRepository();
-    organizations = new InMemoryOrganizationRepository(memberships);
-    access = new OrganizationAccessService(organizations, memberships);
+    roles = new InMemoryRoleRepository();
+    memberships = new InMemoryMembershipRepository(roles);
+    organizations = new InMemoryOrganizationRepository();
+    access = new OrganizationAccessService(organizations, memberships, roles);
 
     const users = new FakeUserDirectory();
     for (const user of [OWNER, MEMBER, OUTSIDER])
@@ -83,18 +69,23 @@ describe('Acesso a organizações', () => {
       organizations,
       users,
       access,
+      new FakeTransactionManager(),
+      new FixedClock(),
     );
 
     organization = Organization.create({ name: 'Acme', slug: 'acme' });
-    await organizations.createWithOwner(
-      organization,
-      Membership.createOwner(organization.id, OWNER.id),
-    );
+    await organizations.create(organization);
+    const { owner, member } = roles.seedDefaults(organization.id);
     memberships.items.push(
       Membership.create({
         organizationId: organization.id,
+        userId: OWNER.id,
+        roleId: owner.id,
+      }),
+      Membership.create({
+        organizationId: organization.id,
         userId: MEMBER.id,
-        role: MembershipRole.MEMBER,
+        roleId: member.id,
       }),
     );
   });
@@ -117,6 +108,18 @@ describe('Acesso a organizações', () => {
           OrganizationPermission.ORGANIZATIONS_UPDATE,
         ),
       ).rejects.toBeInstanceOf(OrganizationPermissionDeniedError);
+    });
+
+    it('membership removido não tem permissão nenhuma', async () => {
+      memberships.items.find((m) => m.userId === OWNER.id)!.remove();
+
+      await expect(
+        access.requirePermission(
+          organization.id,
+          OWNER.id,
+          OrganizationPermission.MEMBERS_READ,
+        ),
+      ).rejects.toBeInstanceOf(OrganizationNotFoundError);
     });
 
     it('não membro recebe NOT_FOUND, mesmo pedindo permissão', async () => {

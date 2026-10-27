@@ -6,6 +6,10 @@ import { MachineScope } from '@/modules/identity/presentation/auth/machine-scope
 import { FakeTokenVerifier } from '@test/fakes/identity/fake-token-verifier';
 import { FakeMachineTokenVerifier } from '@test/fakes/identity/fake-machine-token-verifier';
 import { createTestApp } from '@test/e2e/setup/create-test-e2e-app';
+import {
+  seedMembership,
+  seedOrganization,
+} from '@test/factory/organizations/seed-organization';
 
 let app: INestApplication;
 let prisma: PrismaService;
@@ -34,11 +38,9 @@ async function createUser(sub: string, status: 'ACTIVE' | 'INACTIVE') {
 }
 
 async function createOrganization(slug: string, ownerId: string) {
-  const organization = await prisma.organization.create({
-    data: { name: slug, slug },
-  });
-  await prisma.membership.create({
-    data: { organizationId: organization.id, userId: ownerId, role: 'OWNER' },
+  const organization = await seedOrganization(prisma, {
+    slug,
+    owner: ownerId,
   });
   return organization.id;
 }
@@ -68,17 +70,13 @@ describe('GET /v1/organizations/:organizationId/members/:userId (e2e)', () => {
 
     acmeId = await createOrganization('acme', ana.id);
     betaId = await createOrganization('beta', ana.id);
-    await prisma.membership.createMany({
-      data: [
-        { organizationId: acmeId, userId: bruno.id, role: 'MEMBER' },
-        { organizationId: acmeId, userId: carla.id, role: 'MEMBER' },
-        {
-          organizationId: acmeId,
-          userId: davi.id,
-          role: 'MEMBER',
-          status: 'REMOVED',
-        },
-      ],
+    for (const userId of [bruno.id, carla.id]) {
+      await seedMembership(prisma, { organizationId: acmeId, userId });
+    }
+    await seedMembership(prisma, {
+      organizationId: acmeId,
+      userId: davi.id,
+      status: 'REMOVED',
     });
 
     await prisma.integrationClient.create({

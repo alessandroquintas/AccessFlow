@@ -3,33 +3,41 @@ import { PrismaService } from '@/shared/infrastructure/database/prisma.service';
 import { PrismaClientProvider } from '@/shared/infrastructure/database/prisma-client.provider';
 import { PrismaTransactionManager } from '@/shared/infrastructure/database/prisma-transaction-manager';
 import { Organization } from '@/modules/organizations/domain/entities/organization.entity';
-import {
-  Membership,
-  MembershipRole,
-} from '@/modules/organizations/domain/entities/membership.entity';
+import { Membership } from '@/modules/organizations/domain/entities/membership.entity';
+import { RoleSystemKey } from '@/modules/organizations/domain/entities/role.entity';
 import { SlugAlreadyTakenError } from '@/modules/organizations/domain/errors/slug-already-taken.error';
 import { LastOwnerError } from '@/modules/organizations/domain/errors/last-owner.error';
+import { CreateOrganizationUseCase } from '@/modules/organizations/application/use-cases/create-organization.use-case';
 import { PrismaMembershipMapper } from '@/modules/organizations/infrastructure/persistence/mappers/prisma-membership.mapper';
 import { PrismaOrganizationRepository } from '@/modules/organizations/infrastructure/persistence/prisma-organization.repository';
 import { PrismaMembershipRepository } from '@/modules/organizations/infrastructure/persistence/prisma-membership.repository';
+import { PrismaRoleRepository } from '@/modules/organizations/infrastructure/persistence/prisma-role.repository';
+import { FakeUserDirectory } from '@test/fakes/organizations/fake-user-directory';
+import { FixedClock } from '@test/fakes/shared/fixed-clock';
+import { seedOrganization } from '@test/factory/organizations/seed-organization';
 
 let prisma: PrismaService;
 let organizations: PrismaOrganizationRepository;
 let memberships: PrismaMembershipRepository;
+let roles: PrismaRoleRepository;
+let users: FakeUserDirectory;
+let createOrganization: CreateOrganizationUseCase;
 
 async function createUser(cognitoSub: string) {
-  return prisma.user.create({
+  const user = await prisma.user.create({
     data: { cognitoSub, name: 'Usuário', email: `${cognitoSub}@example.com` },
   });
+  users.register(cognitoSub, user.id);
+  return user;
 }
 
 async function addMembership(
   organizationId: string,
   userId: string,
-  role: MembershipRole,
+  roleId: string,
   now?: Date,
 ) {
-  const membership = Membership.create({ organizationId, userId, role }, now);
+  const membership = Membership.create({ organizationId, userId, roleId }, now);
   await prisma.membership.create({
     data: PrismaMembershipMapper.toPersistence(membership),
   });
@@ -37,16 +45,17 @@ async function addMembership(
 }
 
 async function createOrganizationWithOwner(slug: string, ownerId: string) {
-  const organization = Organization.create({ name: 'Acme', slug });
-  await organizations.createWithOwner(
-    organization,
-    Membership.createOwner(
-      organization.id,
-      ownerId,
-      new Date('2026-01-01T00:00:00Z'),
-    ),
-  );
-  return organization;
+  return seedOrganization(prisma, {
+    slug,
+    name: 'Acme',
+    members: [
+      {
+        userId: ownerId,
+        role: RoleSystemKey.OWNER,
+        createdAt: new Date('2026-01-01T00:00:00Z'),
+      },
+    ],
+  });
 }
 
 describe('Repositórios de organizations (integração)', () => {
@@ -55,8 +64,18 @@ describe('Repositórios de organizations (integração)', () => {
     await prisma.$connect();
     const clients = new PrismaClientProvider(prisma);
     const transactions = new PrismaTransactionManager(prisma, clients);
-    organizations = new PrismaOrganizationRepository(clients, transactions);
+    organizations = new PrismaOrganizationRepository(clients);
     memberships = new PrismaMembershipRepository(clients, transactions);
+    roles = new PrismaRoleRepository(clients, transactions);
+    users = new FakeUserDirectory();
+    createOrganization = new CreateOrganizationUseCase(
+      organizations,
+      roles,
+      memberships,
+      users,
+      transactions,
+      new FixedClock(),
+    );
   });
 
   afterAll(async () => {
@@ -69,10 +88,12 @@ describe('Repositórios de organizations (integração)', () => {
 
   it('cria a organização e o OWNER juntos', async () => {
     const user = await createUser('sub-ana');
-    const organization = Organization.create({ name: 'Acme', slug: 'acme' });
-    const owner = Membership.createOwner(organization.id, user.id);
 
-    await organizations.createWithOwner(organization, owner);
+    const { organization } = await createOrganization.execute({
+      cognitoSub: 'sub-ana',
+      name: 'Acme',
+      slug: 'acme',
+    });
 
     const found = await organizations.findById(organization.id);
     expect(found?.slug).toBe('acme');
@@ -81,25 +102,27 @@ describe('Repositórios de organizations (integração)', () => {
       organization.id,
       user.id,
     );
-    expect(membership?.isOwner()).toBe(true);
+    expect(
+      (await roles.findById(organization.id, membership!.roleId))?.isOwner(),
+    ).toBe(true);
   });
 
   it('recusa slug duplicado e não deixa nada pela metade', async () => {
-    const ana = await createUser('sub-ana');
-    const bruno = await createUser('sub-bruno');
+    await createUser('sub-ana');
+    await createUser('sub-bruno');
 
-    const first = Organization.create({ name: 'Acme', slug: 'acme' });
-    await organizations.createWithOwner(
-      first,
-      Membership.createOwner(first.id, ana.id),
-    );
+    await createOrganization.execute({
+      cognitoSub: 'sub-ana',
+      name: 'Acme',
+      slug: 'acme',
+    });
 
-    const second = Organization.create({ name: 'Outra Acme', slug: 'acme' });
     await expect(
-      organizations.createWithOwner(
-        second,
-        Membership.createOwner(second.id, bruno.id),
-      ),
+      createOrganization.execute({
+        cognitoSub: 'sub-bruno',
+        name: 'Outra Acme',
+        slug: 'acme',
+      }),
     ).rejects.toBeInstanceOf(SlugAlreadyTakenError);
 
     expect(await prisma.organization.count()).toBe(1);
@@ -107,14 +130,16 @@ describe('Repositórios de organizations (integração)', () => {
   });
 
   it('desfaz a organização se o membership falhar (atomicidade)', async () => {
-    const organization = Organization.create({ name: 'Acme', slug: 'acme' });
-    const ownerSemUsuario = Membership.createOwner(
-      organization.id,
-      crypto.randomUUID(),
-    );
+    // Perfil que o diretório conhece, mas sem linha em users: a FK do
+    // membership falha depois que a organização e os papéis foram gravados.
+    users.register('sub-sem-usuario', crypto.randomUUID());
 
     await expect(
-      organizations.createWithOwner(organization, ownerSemUsuario),
+      createOrganization.execute({
+        cognitoSub: 'sub-sem-usuario',
+        name: 'Acme',
+        slug: 'acme',
+      }),
     ).rejects.toThrow();
 
     expect(await prisma.organization.count()).toBe(0);
@@ -123,17 +148,15 @@ describe('Repositórios de organizations (integração)', () => {
   it('lista só os memberships ativos do usuário', async () => {
     const user = await createUser('sub-ana');
 
-    const acme = Organization.create({ name: 'Acme', slug: 'acme' });
-    await organizations.createWithOwner(
-      acme,
-      Membership.createOwner(acme.id, user.id),
-    );
+    const acme = await seedOrganization(prisma, {
+      slug: 'acme',
+      owner: user.id,
+    });
 
-    const beta = Organization.create({ name: 'Beta', slug: 'beta' });
-    await organizations.createWithOwner(
-      beta,
-      Membership.createOwner(beta.id, user.id),
-    );
+    const beta = await seedOrganization(prisma, {
+      slug: 'beta',
+      owner: user.id,
+    });
     await prisma.membership.updateMany({
       where: { organizationId: beta.id },
       data: { status: 'REMOVED' },
@@ -147,40 +170,34 @@ describe('Repositórios de organizations (integração)', () => {
   it('retorna null quando o usuário não pertence à organização', async () => {
     const ana = await createUser('sub-ana');
     const bruno = await createUser('sub-bruno');
-    const acme = Organization.create({ name: 'Acme', slug: 'acme' });
-    await organizations.createWithOwner(
-      acme,
-      Membership.createOwner(acme.id, ana.id),
-    );
+    const acme = await seedOrganization(prisma, {
+      slug: 'acme',
+      owner: ana.id,
+    });
 
     expect(
       await memberships.findByOrganizationAndUser(acme.id, bruno.id),
     ).toBeNull();
   });
 
-  it('memberships.role guarda o papel corretamente', async () => {
+  it('memberships.role_id guarda o papel corretamente', async () => {
     const user = await createUser('sub-ana');
-    const acme = Organization.create({ name: 'Acme', slug: 'acme' });
-    await organizations.createWithOwner(
-      acme,
-      Membership.createOwner(acme.id, user.id),
-    );
+    const acme = await seedOrganization(prisma, {
+      slug: 'acme',
+      owner: user.id,
+    });
 
     const membership = await memberships.findByOrganizationAndUser(
       acme.id,
       user.id,
     );
 
-    expect(membership?.role).toBe(MembershipRole.OWNER);
+    expect(membership?.roleId).toBe(acme.roleIds.OWNER);
   });
 
   it('save persiste o novo nome', async () => {
-    const user = await createUser('sub-ana');
     const organization = Organization.create({ name: 'Acme', slug: 'acme' });
-    await organizations.createWithOwner(
-      organization,
-      Membership.createOwner(organization.id, user.id),
-    );
+    await organizations.create(organization);
 
     organization.rename('Acme Global');
     await organizations.save(organization);
@@ -201,26 +218,26 @@ describe('Repositórios de organizations (integração)', () => {
         await addMembership(
           acme.id,
           (await createUser('sub-b')).id,
-          MembershipRole.MEMBER,
+          acme.roleIds.MEMBER,
           sameTime,
         ),
         await addMembership(
           acme.id,
           (await createUser('sub-c')).id,
-          MembershipRole.MEMBER,
+          acme.roleIds.MEMBER,
           sameTime,
         ),
       ].sort((a, b) => (a.id < b.id ? -1 : 1));
       const later = await addMembership(
         acme.id,
         (await createUser('sub-d')).id,
-        MembershipRole.MEMBER,
+        acme.roleIds.MEMBER,
         new Date('2026-01-03T00:00:00Z'),
       );
       const removed = await addMembership(
         acme.id,
         (await createUser('sub-e')).id,
-        MembershipRole.MEMBER,
+        acme.roleIds.MEMBER,
         new Date('2026-01-04T00:00:00Z'),
       );
       await prisma.membership.update({
@@ -256,10 +273,10 @@ describe('Repositórios de organizations (integração)', () => {
       const member = await addMembership(
         acme.id,
         bruno.id,
-        MembershipRole.MEMBER,
+        acme.roleIds.MEMBER,
       );
 
-      await memberships.remove(member);
+      await memberships.remove(member, new Date());
 
       const record = await prisma.membership.findUnique({
         where: { id: member.id },
@@ -276,9 +293,9 @@ describe('Repositórios de organizations (integração)', () => {
         ana.id,
       );
 
-      await expect(memberships.remove(owner!)).rejects.toBeInstanceOf(
-        LastOwnerError,
-      );
+      await expect(
+        memberships.remove(owner!, new Date()),
+      ).rejects.toBeInstanceOf(LastOwnerError);
 
       const record = await prisma.membership.findUnique({
         where: { id: owner!.id },
@@ -290,7 +307,7 @@ describe('Repositórios de organizations (integração)', () => {
       const ana = await createUser('sub-ana');
       const bruno = await createUser('sub-bruno');
       const acme = await createOrganizationWithOwner('acme', ana.id);
-      await addMembership(acme.id, bruno.id, MembershipRole.OWNER);
+      await addMembership(acme.id, bruno.id, acme.roleIds.OWNER);
 
       const [anaOwner, brunoOwner] = await Promise.all([
         memberships.findByOrganizationAndUser(acme.id, ana.id),
@@ -305,8 +322,8 @@ describe('Repositórios de organizations (integração)', () => {
       );
 
       const results = await Promise.allSettled([
-        memberships.remove(anaOwner!),
-        memberships.remove(brunoOwner!),
+        memberships.remove(anaOwner!, new Date()),
+        memberships.remove(brunoOwner!, new Date()),
       ]);
 
       const fulfilled = results.filter((r) => r.status === 'fulfilled');
@@ -317,7 +334,11 @@ describe('Repositórios de organizations (integração)', () => {
 
       expect(
         await prisma.membership.count({
-          where: { organizationId: acme.id, role: 'OWNER', status: 'ACTIVE' },
+          where: {
+            organizationId: acme.id,
+            role: { systemKey: 'OWNER' },
+            status: 'ACTIVE',
+          },
         }),
       ).toBe(1);
     });

@@ -54,6 +54,7 @@ const OUTPUT_BY_DOMAIN_CODE: Record<string, ErrorOutput> = {
   INVALID_INTEGRATION_CLIENT: BAD_REQUEST,
   INVALID_EMAIL: BAD_REQUEST,
   INVALID_INVITATION: BAD_REQUEST,
+  INVALID_ROLE: BAD_REQUEST,
 };
 
 function outputFor(error: DomainError): ErrorOutput {

@@ -1,5 +1,5 @@
 import { OrganizationWithMembership } from '@/modules/organizations/application/dto/organization-with-membership';
-import { MembershipRole } from '@/modules/organizations/domain/entities/membership.entity';
+import { MembershipRole, membershipRoleOf } from '../../membership-role';
 import { OrganizationStatus } from '@/modules/organizations/domain/entities/organization.entity';
 import { Field, ID, ObjectType, registerEnumType } from '@nestjs/graphql';
 
@@ -30,7 +30,7 @@ export class OrganizationType {
 
   static from({
     organization,
-    membership,
+    role,
   }: OrganizationWithMembership): OrganizationType {
     const type = new OrganizationType();
     type.id = organization.id;
@@ -38,7 +38,7 @@ export class OrganizationType {
     type.slug = organization.slug;
     type.status = organization.status;
     type.createdAt = organization.createdAt;
-    type.viewerRole = membership.role;
+    type.viewerRole = membershipRoleOf(role);
     return type;
   }
 }

@@ -2,10 +2,11 @@ import {
   InvitationCursor,
   InvitationRepository,
 } from '../../domain/repositories/invitation.repository';
+import { RoleRepository } from '../../domain/repositories/role.repository';
 import { OrganizationPermission } from '../../policies/organization-permission';
 import { OrganizationInvitationsPage } from '../dto/organization-invitation';
 import { UserDirectoryPort } from '../ports/user-directory.port';
-import { attachInviters } from '../services/attach-inviters';
+import { describeInvitations } from '../services/describe-invitations';
 import { OrganizationAccessService } from '../services/organization-access.service';
 
 export interface ListOrganizationInvitationsInput {
@@ -18,6 +19,7 @@ export interface ListOrganizationInvitationsInput {
 export class ListOrganizationInvitationsUseCase {
   constructor(
     private readonly invitations: InvitationRepository,
+    private readonly roles: RoleRepository,
     private readonly users: UserDirectoryPort,
     private readonly access: OrganizationAccessService,
   ) {}
@@ -41,7 +43,7 @@ export class ListOrganizationInvitationsUseCase {
     );
 
     return {
-      items: await attachInviters(this.users, page.items),
+      items: await describeInvitations(this.users, this.roles, page.items),
       hasNextPage: page.hasNextPage,
     };
   }

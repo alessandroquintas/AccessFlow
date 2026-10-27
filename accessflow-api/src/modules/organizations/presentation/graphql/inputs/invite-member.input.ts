@@ -1,4 +1,4 @@
-import { MembershipRole } from '@/modules/organizations/domain/entities/membership.entity';
+import { MembershipRole } from '../../membership-role';
 import { Field, InputType } from '@nestjs/graphql';
 
 @InputType()

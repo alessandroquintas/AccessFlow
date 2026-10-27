@@ -5,6 +5,7 @@ import {
   MembershipPage,
   MembershipRepository,
 } from '@/modules/organizations/domain/repositories/membership.repository';
+import { InMemoryRoleRepository } from './in-memory-role-repository';
 
 function compareByCreatedAtAndId(a: Membership, b: Membership): number {
   const byDate = a.createdAt.getTime() - b.createdAt.getTime();
@@ -20,6 +21,10 @@ function isAfter(membership: Membership, cursor: MembershipCursor): boolean {
 
 export class InMemoryMembershipRepository extends MembershipRepository {
   items: Membership[] = [];
+
+  constructor(private readonly roles: InMemoryRoleRepository) {
+    super();
+  }
 
   async findByOrganizationAndUser(
     organizationId: string,
@@ -51,21 +56,35 @@ export class InMemoryMembershipRepository extends MembershipRepository {
     };
   }
 
-  async remove(membership: Membership): Promise<void> {
-    if (membership.isOwner()) {
+  async create(membership: Membership): Promise<void> {
+    this.items.push(membership);
+  }
+
+  async remove(membership: Membership, now: Date): Promise<void> {
+    if (this.isActiveOwner(membership)) {
       const otherOwners = this.items.filter(
         (m) =>
           m.organizationId === membership.organizationId &&
           m.id !== membership.id &&
-          m.isOwner(),
+          this.isActiveOwner(m),
       );
       if (otherOwners.length === 0) throw new LastOwnerError();
     }
 
-    membership.remove();
+    membership.remove(now);
     const index = this.items.findIndex((m) => m.id === membership.id);
     if (index >= 0) {
       this.items[index] = membership;
     }
+  }
+
+  /** Mesma regra do Prisma: ativo e com o papel de sistema OWNER. */
+  private isActiveOwner(membership: Membership): boolean {
+    return (
+      membership.isActive() &&
+      this.roles.items.some(
+        (role) => role.id === membership.roleId && role.isOwner(),
+      )
+    );
   }
 }

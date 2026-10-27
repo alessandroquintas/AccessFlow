@@ -1,4 +1,5 @@
 import { Invitation } from '../../domain/entities/invitation.entity';
+import { Role } from '../../domain/entities/role.entity';
 
 export interface InvitationInviter {
   userId: string;
@@ -9,6 +10,8 @@ export interface InvitationInviter {
 export interface OrganizationInvitation {
   invitation: Invitation;
   invitedBy: InvitationInviter;
+  /** Papel ao aceitar. */
+  role: Role;
 }
 
 export interface OrganizationInvitationsPage {

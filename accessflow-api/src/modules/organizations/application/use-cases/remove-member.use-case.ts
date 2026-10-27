@@ -1,5 +1,8 @@
+import { ClockPort } from '@/shared/application/ports/clock.port';
+import { TransactionManager } from '@/shared/application/ports/transaction-manager.port';
 import { isUuid } from '@/shared/domain/uuid';
 import { MembershipRepository } from '../../domain/repositories/membership.repository';
+import { OrganizationRepository } from '../../domain/repositories/organization.repository';
 import { CannotRemoveSelfError } from '../../domain/errors/cannot-remove-self.error';
 import { MemberNotFoundError } from '../../domain/errors/member-not-found.error';
 import { OrganizationPermission } from '../../policies/organization-permission';
@@ -14,44 +17,48 @@ export interface RemoveMemberInput {
 
 export class RemoveMemberUseCase {
   constructor(
+    private readonly organizations: OrganizationRepository,
     private readonly memberships: MembershipRepository,
     private readonly users: UserDirectoryPort,
     private readonly access: OrganizationAccessService,
+    private readonly transactions: TransactionManager,
+    private readonly clock: ClockPort,
   ) {}
 
   async execute(input: RemoveMemberInput): Promise<void> {
     const actorId = await this.users.getActiveUserId(input.cognitoSub);
 
-    // Limitação conhecida: a permissão do autor é checada fora da transação
-    // do remove. Com 3 ou mais OWNERs, se o autor for removido no mesmo
-    // instante em que remove outro membro, a ação dele ainda passa (a regra
-    // do último OWNER continua garantida). Será tratado com o RBAC da Fase 8.
-    await this.access.requirePermission(
-      input.organizationId,
-      actorId,
-      OrganizationPermission.MEMBERS_REMOVE,
-    );
+    await this.transactions.run(async () => {
+      // Trava antes de checar a permissão do autor: se ele for removido ou
+      // perder o papel ao mesmo tempo, uma das duas escritas espera a outra.
+      await this.organizations.lock(input.organizationId);
+      await this.access.requirePermission(
+        input.organizationId,
+        actorId,
+        OrganizationPermission.MEMBERS_REMOVE,
+      );
 
-    // O Postgres compara UUID sem diferenciar maiúsculas; sem normalizar,
-    // o próprio id em maiúsculas escaparia da checagem abaixo.
-    const targetUserId = input.userId.toLowerCase();
+      // O Postgres compara UUID sem diferenciar maiúsculas; sem normalizar,
+      // o próprio id em maiúsculas escaparia da checagem abaixo.
+      const targetUserId = input.userId.toLowerCase();
 
-    if (targetUserId === actorId) {
-      throw new CannotRemoveSelfError();
-    }
+      if (targetUserId === actorId) {
+        throw new CannotRemoveSelfError();
+      }
 
-    if (!isUuid(targetUserId)) {
-      throw new MemberNotFoundError();
-    }
+      if (!isUuid(targetUserId)) {
+        throw new MemberNotFoundError();
+      }
 
-    const target = await this.memberships.findByOrganizationAndUser(
-      input.organizationId,
-      targetUserId,
-    );
-    if (!target?.isActive()) {
-      throw new MemberNotFoundError();
-    }
+      const target = await this.memberships.findByOrganizationAndUser(
+        input.organizationId,
+        targetUserId,
+      );
+      if (!target?.isActive()) {
+        throw new MemberNotFoundError();
+      }
 
-    await this.memberships.remove(target);
+      await this.memberships.remove(target, this.clock.now());
+    });
   }
 }

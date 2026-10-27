@@ -1,5 +1,4 @@
-import { MembershipRole } from '../domain/entities/membership.entity';
-
+/** Catálogo das permissões do sistema: a única fonte das chaves. */
 export const OrganizationPermission = {
   ORGANIZATIONS_UPDATE: 'organizations:update',
   MEMBERS_READ: 'members:read',
@@ -13,24 +12,11 @@ export const OrganizationPermission = {
 export type OrganizationPermission =
   (typeof OrganizationPermission)[keyof typeof OrganizationPermission];
 
-const ALL_PERMISSIONS = Object.values(OrganizationPermission);
-
 /**
- * Permissões de cada papel fixo. Provisório até o RBAC da Fase 8,
- * quando os papéis e suas permissões passam a vir do banco.
+ * Permissões com que o papel MEMBER de toda organização nasce. Depois de
+ * criado, as dele passam a vir do banco. O OWNER não precisa de lista: tem
+ * todas.
  */
-
-const PERMISSION_BY_ROLE: Record<
-  MembershipRole,
-  ReadonlySet<OrganizationPermission>
-> = {
-  OWNER: new Set(ALL_PERMISSIONS),
-  MEMBER: new Set([OrganizationPermission.MEMBERS_READ]),
-};
-
-export function roleHasPermission(
-  role: MembershipRole,
-  permission: OrganizationPermission,
-): boolean {
-  return PERMISSION_BY_ROLE[role].has(permission);
-}
+export const DEFAULT_MEMBER_PERMISSIONS: readonly OrganizationPermission[] = [
+  OrganizationPermission.MEMBERS_READ,
+];

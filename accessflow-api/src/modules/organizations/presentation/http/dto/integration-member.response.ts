@@ -1,6 +1,6 @@
 import { ApiProperty } from '@nestjs/swagger';
 import { IntegrationMembership } from '@/modules/organizations/application/dto/integration-membership';
-import { MembershipRole } from '@/modules/organizations/domain/entities/membership.entity';
+import { MembershipRole, membershipRoleOf } from '../../membership-role';
 
 export class IntegrationMemberResponse {
   @ApiProperty({
@@ -33,7 +33,7 @@ export class IntegrationMemberResponse {
     const response = new IntegrationMemberResponse();
     response.organizationId = membership.organizationId;
     response.userId = membership.userId;
-    response.role = membership.role;
+    response.role = membershipRoleOf(membership.role);
     response.joinedAt = membership.joinedAt.toISOString();
     return response;
   }

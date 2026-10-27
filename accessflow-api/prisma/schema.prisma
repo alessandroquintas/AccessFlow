@@ -17,7 +17,7 @@ enum OrganizationStatus {
   INACTIVE
 }
 
-enum MembershipRole {
+enum RoleSystemKey {
   OWNER
   MEMBER
 }
@@ -49,8 +49,44 @@ model Organization {
   memberships        Membership[]
   integrationClients IntegrationClient[]
   invitations        Invitation[]
+  roles              Role[]
 
   @@map("organizations")
+}
+
+model Role {
+  id             String         @id @default(uuid()) @db.Uuid
+  organizationId String         @map("organization_id") @db.Uuid
+  name           String
+  description    String?
+  systemKey      RoleSystemKey? @map("system_key")
+  deletedAt      DateTime?      @map("deleted_at") @db.Timestamptz(3)
+  createdAt      DateTime       @default(now()) @map("created_at") @db.Timestamptz(3)
+  updatedAt      DateTime       @updatedAt @map("updated_at") @db.Timestamptz(3)
+
+  organization Organization     @relation(fields: [organizationId], references: [id], onDelete: Restrict)
+  permissions  RolePermission[]
+  memberships  Membership[]
+  invitations  Invitation[]
+
+  // Um OWNER e um MEMBER por organização. Papéis customizados têm
+  // system_key NULL, e o Postgres não considera NULLs iguais entre si.
+  @@unique([organizationId, systemKey])
+  // Alvo das FKs compostas: membership e convite só apontam para papel da
+  // própria organização.
+  @@unique([id, organizationId])
+  @@map("roles")
+}
+
+// O OWNER não tem linhas aqui: tem todas as permissões, calculadas no código.
+model RolePermission {
+  roleId        String @map("role_id") @db.Uuid
+  permissionKey String @map("permission_key")
+
+  role Role @relation(fields: [roleId], references: [id], onDelete: Restrict)
+
+  @@id([roleId, permissionKey])
+  @@map("role_permissions")
 }
 
 model IntegrationClient {
@@ -72,17 +108,19 @@ model Membership {
   id             String           @id @default(uuid()) @db.Uuid
   organizationId String           @map("organization_id") @db.Uuid
   userId         String           @map("user_id") @db.Uuid
-  role           MembershipRole
+  roleId         String           @map("role_id") @db.Uuid
   status         MembershipStatus @default(ACTIVE)
   createdAt      DateTime         @default(now()) @map("created_at") @db.Timestamptz(3)
   updatedAt      DateTime         @updatedAt @map("updated_at") @db.Timestamptz(3)
 
   organization Organization @relation(fields: [organizationId], references: [id], onDelete: Restrict)
   user         User         @relation(fields: [userId], references: [id], onDelete: Restrict)
+  role         Role         @relation(fields: [roleId, organizationId], references: [id, organizationId], onDelete: Restrict)
 
   @@unique([organizationId, userId])
   @@index([userId])
   @@index([organizationId, createdAt, id])
+  @@index([roleId, organizationId])
   @@map("memberships")
 }
 
@@ -90,7 +128,7 @@ model Invitation {
   id              String           @id @default(uuid()) @db.Uuid
   organizationId  String           @map("organization_id") @db.Uuid
   email           String
-  role            MembershipRole
+  roleId          String           @map("role_id") @db.Uuid
   status          InvitationStatus @default(PENDING)
   invitedByUserId String           @map("invited_by_user_id") @db.Uuid
   expiresAt       DateTime         @map("expires_at") @db.Timestamptz(3)
@@ -99,12 +137,14 @@ model Invitation {
 
   organization Organization @relation(fields: [organizationId], references: [id], onDelete: Restrict)
   invitedBy    User         @relation(fields: [invitedByUserId], references: [id], onDelete: Restrict)
+  role         Role         @relation(fields: [roleId, organizationId], references: [id, organizationId], onDelete: Restrict)
 
   // Listagem da organização e contagem do limite de pendentes.
   @@index([organizationId, status, createdAt, id])
   // myInvitations.
   @@index([email, status])
   @@index([invitedByUserId])
+  @@index([roleId, organizationId])
   @@map("invitations")
 }
 

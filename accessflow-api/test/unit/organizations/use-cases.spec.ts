@@ -2,19 +2,23 @@ import { beforeEach, describe, expect, it } from 'vitest';
 import { ListMyOrganizationsUseCase } from '@/modules/organizations/application/use-cases/list-my-organizations.use-case';
 import { GetOrganizationUseCase } from '@/modules/organizations/application/use-cases/get-organization.use-case';
 import { OrganizationAccessService } from '@/modules/organizations/application/services/organization-access.service';
-import { MembershipRole } from '@/modules/organizations/domain/entities/membership.entity';
+import { RoleSystemKey } from '@/modules/organizations/domain/entities/role.entity';
 import { SlugAlreadyTakenError } from '@/modules/organizations/domain/errors/slug-already-taken.error';
 import { OrganizationNotFoundError } from '@/modules/organizations/domain/errors/organization-not-found.error';
 import { InvalidOrganizationError } from '@/modules/organizations/domain/errors/invalid-organization.error';
 import { UserNotFoundError } from '@/modules/identity/domain/errors/user-not-found.error';
 import { InMemoryOrganizationRepository } from '@test/in-memory/organizations/in-memory-organization-repository';
 import { InMemoryMembershipRepository } from '@test/in-memory/organizations/in-memory-membership-repository';
+import { InMemoryRoleRepository } from '@test/in-memory/organizations/in-memory-role-repository';
 import { FakeUserDirectory } from '@test/fakes/organizations/fake-user-directory';
+import { FakeTransactionManager } from '@test/fakes/shared/fake-transaction-manager';
+import { FixedClock } from '@test/fakes/shared/fixed-clock';
 import { CreateOrganizationUseCase } from '@/modules/organizations/application/use-cases/create-organization.use-case';
 
 const ANA = { sub: 'sub-ana', id: '11111111-1111-4111-8111-111111111111' };
 const BRUNO = { sub: 'sub-bruno', id: '22222222-2222-4222-8222-222222222222' };
 
+let roles: InMemoryRoleRepository;
 let memberships: InMemoryMembershipRepository;
 let organizations: InMemoryOrganizationRepository;
 let users: FakeUserDirectory;
@@ -24,17 +28,30 @@ let getOrganization: GetOrganizationUseCase;
 
 describe('Casos de uso de organizations', () => {
   beforeEach(() => {
-    memberships = new InMemoryMembershipRepository();
-    organizations = new InMemoryOrganizationRepository(memberships);
+    roles = new InMemoryRoleRepository();
+    memberships = new InMemoryMembershipRepository(roles);
+    organizations = new InMemoryOrganizationRepository();
     users = new FakeUserDirectory();
     users.register(ANA.sub, ANA.id);
     users.register(BRUNO.sub, BRUNO.id);
 
-    const access = new OrganizationAccessService(organizations, memberships);
-    createOrganization = new CreateOrganizationUseCase(organizations, users);
+    const access = new OrganizationAccessService(
+      organizations,
+      memberships,
+      roles,
+    );
+    createOrganization = new CreateOrganizationUseCase(
+      organizations,
+      roles,
+      memberships,
+      users,
+      new FakeTransactionManager(),
+      new FixedClock(),
+    );
     listMyOrganizations = new ListMyOrganizationsUseCase(
       organizations,
       memberships,
+      roles,
       users,
     );
     getOrganization = new GetOrganizationUseCase(users, access);
@@ -50,8 +67,40 @@ describe('Casos de uso de organizations', () => {
 
       expect(organization.slug).toBe('acme');
       expect(membership.userId).toBe(ANA.id);
-      expect(membership.role).toBe(MembershipRole.OWNER);
+      expect(
+        (await roles.findById(organization.id, membership.roleId))?.systemKey,
+      ).toBe(RoleSystemKey.OWNER);
       expect(memberships.items).toHaveLength(1);
+    });
+
+    it('cria exatamente os dois papéis padrão, com members:read só no MEMBER', async () => {
+      const { organization } = await createOrganization.execute({
+        cognitoSub: ANA.sub,
+        name: 'Acme',
+        slug: 'acme',
+      });
+
+      expect(
+        roles.items.map((role) => ({
+          organizationId: role.organizationId,
+          systemKey: role.systemKey,
+          name: role.name,
+          permissions: role.permissions,
+        })),
+      ).toEqual([
+        {
+          organizationId: organization.id,
+          systemKey: RoleSystemKey.OWNER,
+          name: 'Owner',
+          permissions: [],
+        },
+        {
+          organizationId: organization.id,
+          systemKey: RoleSystemKey.MEMBER,
+          name: 'Member',
+          permissions: ['members:read'],
+        },
+      ]);
     });
 
     it('recusa slug já usado', async () => {
@@ -139,7 +188,7 @@ describe('Casos de uso de organizations', () => {
       });
 
       expect(result.organization.id).toBe(created.organization.id);
-      expect(result.membership.role).toBe(MembershipRole.OWNER);
+      expect(result.role.systemKey).toBe(RoleSystemKey.OWNER);
     });
 
     it('responde NOT_FOUND para quem não é membro', async () => {

@@ -1,3 +1,5 @@
+import { ClockPort } from '@/shared/application/ports/clock.port';
+import { TransactionManager } from '@/shared/application/ports/transaction-manager.port';
 import { OrganizationRepository } from '../../domain/repositories/organization.repository';
 import { OrganizationPermission } from '../../policies/organization-permission';
 import { OrganizationWithMembership } from '../dto/organization-with-membership';
@@ -15,6 +17,8 @@ export class UpdateOrganizationUseCase {
     private readonly organizations: OrganizationRepository,
     private readonly users: UserDirectoryPort,
     private readonly access: OrganizationAccessService,
+    private readonly transactions: TransactionManager,
+    private readonly clock: ClockPort,
   ) {}
 
   async execute(
@@ -22,15 +26,20 @@ export class UpdateOrganizationUseCase {
   ): Promise<OrganizationWithMembership> {
     const userId = await this.users.getActiveUserId(input.cognitoSub);
 
-    const context = await this.access.requirePermission(
-      input.organizationId,
-      userId,
-      OrganizationPermission.ORGANIZATIONS_UPDATE,
-    );
+    return this.transactions.run(async () => {
+      // Trava antes de checar: uma mudança de papel concorrente, que também
+      // trava a organização, não passa entre a checagem e a escrita.
+      await this.organizations.lock(input.organizationId);
+      const context = await this.access.requirePermission(
+        input.organizationId,
+        userId,
+        OrganizationPermission.ORGANIZATIONS_UPDATE,
+      );
 
-    context.organization.rename(input.name);
-    await this.organizations.save(context.organization);
+      context.organization.rename(input.name, this.clock.now());
+      await this.organizations.save(context.organization);
 
-    return context;
+      return context;
+    });
   }
 }

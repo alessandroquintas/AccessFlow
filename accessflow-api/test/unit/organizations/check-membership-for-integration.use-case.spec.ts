@@ -3,10 +3,8 @@ import {
   Organization,
   OrganizationStatus,
 } from '@/modules/organizations/domain/entities/organization.entity';
-import {
-  Membership,
-  MembershipRole,
-} from '@/modules/organizations/domain/entities/membership.entity';
+import { Membership } from '@/modules/organizations/domain/entities/membership.entity';
+import { RoleSystemKey } from '@/modules/organizations/domain/entities/role.entity';
 import {
   IntegrationClient,
   IntegrationClientStatus,
@@ -16,6 +14,7 @@ import { OrganizationNotFoundError } from '@/modules/organizations/domain/errors
 import { MemberNotFoundError } from '@/modules/organizations/domain/errors/member-not-found.error';
 import { InMemoryOrganizationRepository } from '@test/in-memory/organizations/in-memory-organization-repository';
 import { InMemoryMembershipRepository } from '@test/in-memory/organizations/in-memory-membership-repository';
+import { InMemoryRoleRepository } from '@test/in-memory/organizations/in-memory-role-repository';
 import { InMemoryIntegrationClientRepository } from '@test/in-memory/organizations/in-memory-integration-client-repository';
 import { FakeUserDirectory } from '@test/fakes/organizations/fake-user-directory';
 
@@ -26,6 +25,7 @@ const INACTIVE_ID = '44444444-4444-4444-8444-444444444444';
 const REMOVED_ID = '55555555-5555-4555-8555-555555555555';
 const JOINED_AT = new Date('2026-01-02T00:00:00.000Z');
 
+let roles: InMemoryRoleRepository;
 let memberships: InMemoryMembershipRepository;
 let organizations: InMemoryOrganizationRepository;
 let integrationClients: InMemoryIntegrationClientRepository;
@@ -51,9 +51,17 @@ function addClient(
   );
 }
 
-function addMember(organizationId: string, userId: string) {
+function addMember(
+  organizationId: string,
+  userId: string,
+  role: RoleSystemKey = RoleSystemKey.MEMBER,
+) {
   const membership = Membership.create(
-    { organizationId, userId, role: MembershipRole.MEMBER },
+    {
+      organizationId,
+      userId,
+      roleId: roles.systemRole(organizationId, role).id,
+    },
     JOINED_AT,
   );
   memberships.items.push(membership);
@@ -62,8 +70,9 @@ function addMember(organizationId: string, userId: string) {
 
 describe('CheckMembershipForIntegrationUseCase', () => {
   beforeEach(async () => {
-    memberships = new InMemoryMembershipRepository();
-    organizations = new InMemoryOrganizationRepository(memberships);
+    roles = new InMemoryRoleRepository();
+    memberships = new InMemoryMembershipRepository(roles);
+    organizations = new InMemoryOrganizationRepository();
     integrationClients = new InMemoryIntegrationClientRepository();
     const users = new FakeUserDirectory();
     for (const id of [OWNER_ID, MEMBER_ID, OUTSIDER_ID, REMOVED_ID]) {
@@ -75,19 +84,18 @@ describe('CheckMembershipForIntegrationUseCase', () => {
       integrationClients,
       organizations,
       memberships,
+      roles,
       users,
     );
 
     acme = Organization.create({ name: 'Acme', slug: 'acme' });
-    await organizations.createWithOwner(
-      acme,
-      Membership.createOwner(acme.id, OWNER_ID),
-    );
+    await organizations.create(acme);
+    roles.seedDefaults(acme.id);
+    addMember(acme.id, OWNER_ID, RoleSystemKey.OWNER);
     beta = Organization.create({ name: 'Beta', slug: 'beta' });
-    await organizations.createWithOwner(
-      beta,
-      Membership.createOwner(beta.id, OWNER_ID),
-    );
+    await organizations.create(beta);
+    roles.seedDefaults(beta.id);
+    addMember(beta.id, OWNER_ID, RoleSystemKey.OWNER);
 
     addMember(acme.id, MEMBER_ID);
     addMember(acme.id, INACTIVE_ID);
@@ -106,7 +114,7 @@ describe('CheckMembershipForIntegrationUseCase', () => {
     expect(result).toEqual({
       organizationId: acme.id,
       userId: MEMBER_ID,
-      role: MembershipRole.MEMBER,
+      role: roles.systemRole(acme.id, RoleSystemKey.MEMBER),
       joinedAt: JOINED_AT,
     });
   });
@@ -174,6 +182,7 @@ describe('CheckMembershipForIntegrationUseCase', () => {
         updatedAt: new Date(),
       });
       organizations.items.push(inactive);
+      roles.seedDefaults(inactive.id);
       addMember(inactive.id, MEMBER_ID);
       addClient('client-inativa', inactive.id);
 

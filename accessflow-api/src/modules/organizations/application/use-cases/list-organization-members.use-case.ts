@@ -2,10 +2,12 @@ import {
   MembershipCursor,
   MembershipRepository,
 } from '../../domain/repositories/membership.repository';
+import { RoleRepository } from '../../domain/repositories/role.repository';
 import { OrganizationPermission } from '../../policies/organization-permission';
 import { OrganizationMembersPage } from '../dto/organization-member';
 import { UserDirectoryPort } from '../ports/user-directory.port';
 import { OrganizationAccessService } from '../services/organization-access.service';
+import { rolesById } from '../services/roles-by-id';
 
 export interface ListOrganizationMembersInput {
   cognitoSub: string;
@@ -17,6 +19,7 @@ export interface ListOrganizationMembersInput {
 export class ListOrganizationMembersUseCase {
   constructor(
     private readonly memberships: MembershipRepository,
+    private readonly roles: RoleRepository,
     private readonly users: UserDirectoryPort,
     private readonly access: OrganizationAccessService,
   ) {}
@@ -37,15 +40,22 @@ export class ListOrganizationMembersUseCase {
       { first: input.first, after: input.after },
     );
 
-    const profiles = await this.users.getProfilesByIds(
-      page.items.map((membership) => membership.userId),
-    );
+    const [profiles, roleById] = await Promise.all([
+      this.users.getProfilesByIds(
+        page.items.map((membership) => membership.userId),
+      ),
+      rolesById(
+        this.roles,
+        page.items.map((membership) => membership.roleId),
+      ),
+    ]);
     const byId = new Map(profiles.map((profile) => [profile.id, profile]));
 
     return {
       items: page.items.flatMap((membership) => {
         const profile = byId.get(membership.userId);
-        return profile ? [{ membership, profile }] : [];
+        const role = roleById.get(membership.roleId);
+        return profile && role ? [{ membership, profile, role }] : [];
       }),
       hasNextPage: page.hasNextPage,
     };

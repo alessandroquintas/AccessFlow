@@ -2,6 +2,7 @@ import { ClockPort } from '@/shared/application/ports/clock.port';
 import { InvitationNotFoundError } from '../../domain/errors/invitation-not-found.error';
 import { InvitationRepository } from '../../domain/repositories/invitation.repository';
 import { OrganizationRepository } from '../../domain/repositories/organization.repository';
+import { RoleRepository } from '../../domain/repositories/role.repository';
 import { OrganizationWithMembership } from '../dto/organization-with-membership';
 import { UserDirectoryPort } from '../ports/user-directory.port';
 import { requireOwnPendingInvitation } from '../services/require-own-pending-invitation';
@@ -15,6 +16,7 @@ export class AcceptInvitationUseCase {
   constructor(
     private readonly invitations: InvitationRepository,
     private readonly organizations: OrganizationRepository,
+    private readonly roles: RoleRepository,
     private readonly users: UserDirectoryPort,
     private readonly clock: ClockPort,
   ) {}
@@ -45,6 +47,10 @@ export class AcceptInvitationUseCase {
       now,
     });
 
-    return { organization, membership };
+    // O do convite, ou o que já tinha se já era membro ativo.
+    const role = await this.roles.findById(organization.id, membership.roleId);
+    if (!role) throw new Error('Membership sem papel ativo na organização.');
+
+    return { organization, membership, role };
   }
 }

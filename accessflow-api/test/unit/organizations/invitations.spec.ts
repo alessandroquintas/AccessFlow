@@ -1,13 +1,14 @@
-import { beforeEach, describe, expect, it, vi } from 'vitest';
+import { beforeEach, describe, expect, it } from 'vitest';
 import {
   Organization,
   OrganizationStatus,
 } from '@/modules/organizations/domain/entities/organization.entity';
 import {
   Membership,
-  MembershipRole,
   MembershipStatus,
 } from '@/modules/organizations/domain/entities/membership.entity';
+import { RoleSystemKey } from '@/modules/organizations/domain/entities/role.entity';
+import { OrganizationPermission } from '@/modules/organizations/policies/organization-permission';
 import {
   Invitation,
   InvitationStatus,
@@ -31,9 +32,11 @@ import { UserInactiveError } from '@/modules/identity/domain/errors/user-inactiv
 import { InvalidEmailError } from '@/shared/domain/errors/invalid-email.error';
 import { InMemoryOrganizationRepository } from '@test/in-memory/organizations/in-memory-organization-repository';
 import { InMemoryMembershipRepository } from '@test/in-memory/organizations/in-memory-membership-repository';
+import { InMemoryRoleRepository } from '@test/in-memory/organizations/in-memory-role-repository';
 import { InMemoryInvitationRepository } from '@test/in-memory/organizations/in-memory-invitation-repository';
 import { FakeUserDirectory } from '@test/fakes/organizations/fake-user-directory';
 import { FixedClock } from '@test/fakes/shared/fixed-clock';
+import { FakeTransactionManager } from '@test/fakes/shared/fake-transaction-manager';
 
 const DAY = 24 * 60 * 60 * 1000;
 const START = new Date('2026-03-01T12:00:00.000Z');
@@ -60,6 +63,7 @@ const OUTSIDER = {
 };
 
 let clock: FixedClock;
+let roles: InMemoryRoleRepository;
 let memberships: InMemoryMembershipRepository;
 let organizations: InMemoryOrganizationRepository;
 let invitations: InMemoryInvitationRepository;
@@ -75,16 +79,26 @@ let acme: Organization;
 function createOrganization(slug: string): Organization {
   const organization = Organization.create({ name: 'Acme', slug }, START);
   organizations.items.push(organization);
+  roles.seedDefaults(organization.id, START);
   return organization;
+}
+
+/** Id do papel de sistema da organização. */
+function roleIdOf(systemKey: RoleSystemKey, organization = acme): string {
+  return roles.systemRole(organization.id, systemKey).id;
 }
 
 function addMember(
   organization: Organization,
   userId: string,
-  role: MembershipRole,
+  role: RoleSystemKey,
 ): Membership {
   const membership = Membership.create(
-    { organizationId: organization.id, userId, role },
+    {
+      organizationId: organization.id,
+      userId,
+      roleId: roleIdOf(role, organization),
+    },
     START,
   );
   memberships.items.push(membership);
@@ -114,7 +128,7 @@ function deactivate(organization: Organization): void {
 
 async function invite(
   email: string,
-  role: MembershipRole = MembershipRole.MEMBER,
+  role: RoleSystemKey = RoleSystemKey.MEMBER,
   organization = acme,
 ) {
   const { invitation } = await inviteMember.execute({
@@ -129,8 +143,9 @@ async function invite(
 describe('Convites', () => {
   beforeEach(() => {
     clock = new FixedClock(START);
-    memberships = new InMemoryMembershipRepository();
-    organizations = new InMemoryOrganizationRepository(memberships);
+    roles = new InMemoryRoleRepository();
+    memberships = new InMemoryMembershipRepository(roles);
+    organizations = new InMemoryOrganizationRepository();
     invitations = new InMemoryInvitationRepository(memberships);
     users = new FakeUserDirectory();
     users.register(OWNER.sub, OWNER.id, { name: 'Olga', email: OWNER.email });
@@ -144,42 +159,55 @@ describe('Convites', () => {
     });
     users.register(OUTSIDER.sub, OUTSIDER.id, { email: OUTSIDER.email });
 
-    const access = new OrganizationAccessService(organizations, memberships);
+    const transactions = new FakeTransactionManager();
+    const access = new OrganizationAccessService(
+      organizations,
+      memberships,
+      roles,
+    );
     inviteMember = new InviteMemberUseCase(
+      organizations,
       invitations,
       memberships,
+      roles,
       users,
       access,
+      transactions,
       clock,
     );
     listOrganizationInvitations = new ListOrganizationInvitationsUseCase(
       invitations,
+      roles,
       users,
       access,
     );
     revokeInvitation = new RevokeInvitationUseCase(
+      organizations,
       invitations,
       users,
       access,
+      transactions,
       clock,
     );
     listMyInvitations = new ListMyInvitationsUseCase(
       invitations,
       organizations,
+      roles,
       users,
       clock,
     );
     acceptInvitation = new AcceptInvitationUseCase(
       invitations,
       organizations,
+      roles,
       users,
       clock,
     );
     declineInvitation = new DeclineInvitationUseCase(invitations, users, clock);
 
     acme = createOrganization('acme');
-    addMember(acme, OWNER.id, MembershipRole.OWNER);
-    addMember(acme, MEMBER.id, MembershipRole.MEMBER);
+    addMember(acme, OWNER.id, RoleSystemKey.OWNER);
+    addMember(acme, MEMBER.id, RoleSystemKey.MEMBER);
   });
 
   describe('InviteMemberUseCase', () => {
@@ -188,13 +216,13 @@ describe('Convites', () => {
         cognitoSub: OWNER.sub,
         organizationId: acme.id,
         email: INVITEE.email,
-        role: MembershipRole.MEMBER,
+        role: RoleSystemKey.MEMBER,
       });
 
       expect(result.invitation).toMatchObject({
         organizationId: acme.id,
         email: INVITEE.email,
-        role: MembershipRole.MEMBER,
+        roleId: roleIdOf(RoleSystemKey.MEMBER),
         status: InvitationStatus.PENDING,
         invitedByUserId: OWNER.id,
         expiresAt: new Date(START.getTime() + 7 * DAY),
@@ -208,7 +236,7 @@ describe('Convites', () => {
         cognitoSub: OWNER.sub,
         organizationId: acme.id.toUpperCase(),
         email: '  Bruno@Example.COM ',
-        role: MembershipRole.MEMBER,
+        role: RoleSystemKey.MEMBER,
       });
 
       expect(invitation.email).toBe('bruno@example.com');
@@ -216,9 +244,9 @@ describe('Convites', () => {
     });
 
     it('OWNER pode convidar outro OWNER', async () => {
-      const invitation = await invite(INVITEE.email, MembershipRole.OWNER);
+      const invitation = await invite(INVITEE.email, RoleSystemKey.OWNER);
 
-      expect(invitation.role).toBe(MembershipRole.OWNER);
+      expect(invitation.roleId).toBe(roleIdOf(RoleSystemKey.OWNER));
     });
 
     it('MEMBER não convida (FORBIDDEN)', async () => {
@@ -227,19 +255,18 @@ describe('Convites', () => {
           cognitoSub: MEMBER.sub,
           organizationId: acme.id,
           email: INVITEE.email,
-          role: MembershipRole.MEMBER,
+          role: RoleSystemKey.MEMBER,
         }),
       ).rejects.toBeInstanceOf(OrganizationPermissionDeniedError);
       expect(invitations.items).toHaveLength(0);
     });
 
     it('convidar como OWNER exige ser OWNER, mesmo com members:invite', async () => {
-      // Nenhum papel fixo tem members:invite sem ser OWNER; simula o que o
-      // RBAC da Fase 8 vai permitir.
-      // TODO(Fase 8): reescrever com um papel real que tenha members:invite
-      // sem ser OWNER, quando houver papéis configuráveis, e remover o spy.
-      const [member] = membershipOf(MEMBER.id);
-      vi.spyOn(member, 'can').mockReturnValue(true);
+      // O papel MEMBER ganha members:invite: tem a permissão sem ser OWNER.
+      roles.grant(
+        roleIdOf(RoleSystemKey.MEMBER),
+        OrganizationPermission.MEMBERS_INVITE,
+      );
       const input = {
         cognitoSub: MEMBER.sub,
         organizationId: acme.id,
@@ -247,13 +274,13 @@ describe('Convites', () => {
       };
 
       await expect(
-        inviteMember.execute({ ...input, role: MembershipRole.OWNER }),
+        inviteMember.execute({ ...input, role: RoleSystemKey.OWNER }),
       ).rejects.toBeInstanceOf(OrganizationPermissionDeniedError);
       expect(invitations.items).toHaveLength(0);
 
       const { invitation } = await inviteMember.execute({
         ...input,
-        role: MembershipRole.MEMBER,
+        role: RoleSystemKey.MEMBER,
       });
       expect(invitation.invitedByUserId).toBe(MEMBER.id);
     });
@@ -264,7 +291,7 @@ describe('Convites', () => {
           cognitoSub: OUTSIDER.sub,
           organizationId: acme.id,
           email: 'invalido',
-          role: MembershipRole.MEMBER,
+          role: RoleSystemKey.MEMBER,
         }),
       ).rejects.toBeInstanceOf(OrganizationNotFoundError);
     });
@@ -277,7 +304,7 @@ describe('Convites', () => {
             cognitoSub: OWNER.sub,
             organizationId,
             email: INVITEE.email,
-            role: MembershipRole.MEMBER,
+            role: RoleSystemKey.MEMBER,
           }),
         ).rejects.toBeInstanceOf(OrganizationNotFoundError);
       },
@@ -313,7 +340,7 @@ describe('Convites', () => {
       const member = '66666666-6666-4666-8666-666666666666';
       users.register('sub-dup-1', notMember, { email: 'dup@example.com' });
       users.register('sub-dup-2', member, { email: 'dup@example.com' });
-      addMember(acme, member, MembershipRole.MEMBER);
+      addMember(acme, member, RoleSystemKey.MEMBER);
 
       await expect(invite('dup@example.com')).rejects.toBeInstanceOf(
         AlreadyMemberError,
@@ -331,7 +358,7 @@ describe('Convites', () => {
 
     it('membro de outra organização pode ser convidado', async () => {
       const beta = createOrganization('beta');
-      addMember(beta, INVITEE.id, MembershipRole.OWNER);
+      addMember(beta, INVITEE.id, RoleSystemKey.OWNER);
 
       await expect(invite(INVITEE.email)).resolves.toBeDefined();
     });
@@ -343,7 +370,7 @@ describe('Convites', () => {
       addMember(
         acme,
         '77777777-7777-4777-8777-777777777777',
-        MembershipRole.OWNER,
+        RoleSystemKey.OWNER,
       );
       const first = await invite(INVITEE.email);
       clock.advance(2 * DAY);
@@ -352,11 +379,11 @@ describe('Convites', () => {
         cognitoSub: 'sub-owner-2',
         organizationId: acme.id,
         email: INVITEE.email,
-        role: MembershipRole.OWNER,
+        role: RoleSystemKey.OWNER,
       });
 
       expect(result.invitation.id).toBe(first.id);
-      expect(result.invitation.role).toBe(MembershipRole.OWNER);
+      expect(result.invitation.roleId).toBe(roleIdOf(RoleSystemKey.OWNER));
       expect(result.invitedBy.name).toBe('Paula');
       expect(result.invitation.expiresAt).toEqual(
         new Date(START.getTime() + 9 * DAY),
@@ -384,7 +411,7 @@ describe('Convites', () => {
                 {
                   organizationId: acme.id,
                   email: `pessoa-${i}@example.com`,
-                  role: MembershipRole.MEMBER,
+                  roleId: roleIdOf(RoleSystemKey.MEMBER),
                   invitedByUserId: OWNER.id,
                 },
                 START,
@@ -517,7 +544,7 @@ describe('Convites', () => {
 
     it('convite de outra organização: NOT_FOUND, mesmo sendo OWNER das duas', async () => {
       const beta = createOrganization('beta');
-      addMember(beta, OWNER.id, MembershipRole.OWNER);
+      addMember(beta, OWNER.id, RoleSystemKey.OWNER);
       const invitation = await invite(INVITEE.email);
 
       await expect(
@@ -580,10 +607,10 @@ describe('Convites', () => {
   describe('ListMyInvitationsUseCase', () => {
     it('mostra convites pendentes com a organização e o nome de quem convidou', async () => {
       const beta = createOrganization('beta');
-      addMember(beta, OWNER.id, MembershipRole.OWNER);
+      addMember(beta, OWNER.id, RoleSystemKey.OWNER);
       const fromAcme = await invite('BRUNO@Example.com');
       clock.advance(1000);
-      const fromBeta = await invite(INVITEE.email, MembershipRole.OWNER, beta);
+      const fromBeta = await invite(INVITEE.email, RoleSystemKey.OWNER, beta);
 
       const mine = await listMyInvitations.execute({
         cognitoSub: INVITEE.sub,
@@ -594,7 +621,9 @@ describe('Convites', () => {
         fromAcme.id,
       ]);
       expect(mine[0].organization.id).toBe(beta.id);
-      expect(mine[0].invitation.role).toBe(MembershipRole.OWNER);
+      expect(mine[0].invitation.roleId).toBe(
+        roleIdOf(RoleSystemKey.OWNER, beta),
+      );
       expect(mine[1].invitedByName).toBe('Olga');
     });
 
@@ -613,8 +642,8 @@ describe('Convites', () => {
 
     it('não mostra convites de organização inativa nem de outro e-mail', async () => {
       const beta = createOrganization('beta');
-      addMember(beta, OWNER.id, MembershipRole.OWNER);
-      await invite(INVITEE.email, MembershipRole.MEMBER, beta);
+      addMember(beta, OWNER.id, RoleSystemKey.OWNER);
+      await invite(INVITEE.email, RoleSystemKey.MEMBER, beta);
       await invite(OUTSIDER.email);
       deactivate(beta);
 
@@ -638,7 +667,7 @@ describe('Convites', () => {
 
   describe('AcceptInvitationUseCase', () => {
     it('cria o membership com o papel do convite e marca como aceito', async () => {
-      const invitation = await invite(INVITEE.email, MembershipRole.OWNER);
+      const invitation = await invite(INVITEE.email, RoleSystemKey.OWNER);
       clock.advance(DAY);
 
       const result = await acceptInvitation.execute({
@@ -649,7 +678,7 @@ describe('Convites', () => {
       expect(result.organization.id).toBe(acme.id);
       expect(result.membership).toMatchObject({
         userId: INVITEE.id,
-        role: MembershipRole.OWNER,
+        roleId: roleIdOf(RoleSystemKey.OWNER),
         status: MembershipStatus.ACTIVE,
         createdAt: clock.now(),
       });
@@ -744,9 +773,9 @@ describe('Convites', () => {
     });
 
     it('com membership REMOVED, reativa o mesmo com o papel do convite', async () => {
-      const old = addMember(acme, INVITEE.id, MembershipRole.OWNER);
+      const old = addMember(acme, INVITEE.id, RoleSystemKey.OWNER);
       old.remove(START);
-      const invitation = await invite(INVITEE.email, MembershipRole.MEMBER);
+      const invitation = await invite(INVITEE.email, RoleSystemKey.MEMBER);
       clock.advance(DAY);
 
       const result = await acceptInvitation.execute({
@@ -758,7 +787,7 @@ describe('Convites', () => {
       const stored = membershipOf(INVITEE.id);
       expect(stored).toHaveLength(1);
       expect(stored[0]).toMatchObject({
-        role: MembershipRole.MEMBER,
+        roleId: roleIdOf(RoleSystemKey.MEMBER),
         status: MembershipStatus.ACTIVE,
         updatedAt: clock.now(),
         createdAt: START,
@@ -766,18 +795,20 @@ describe('Convites', () => {
     });
 
     it('já sendo membro ativo, consome o convite sem mudar o papel', async () => {
-      const invitation = await invite(INVITEE.email, MembershipRole.OWNER);
+      const invitation = await invite(INVITEE.email, RoleSystemKey.OWNER);
       // Entrou por outro caminho depois do convite.
-      addMember(acme, INVITEE.id, MembershipRole.MEMBER);
+      addMember(acme, INVITEE.id, RoleSystemKey.MEMBER);
 
       const result = await acceptInvitation.execute({
         cognitoSub: INVITEE.sub,
         invitationId: invitation.id,
       });
 
-      expect(result.membership.role).toBe(MembershipRole.MEMBER);
+      expect(result.membership.roleId).toBe(roleIdOf(RoleSystemKey.MEMBER));
       expect(membershipOf(INVITEE.id)).toHaveLength(1);
-      expect(membershipOf(INVITEE.id)[0].role).toBe(MembershipRole.MEMBER);
+      expect(membershipOf(INVITEE.id)[0].roleId).toBe(
+        roleIdOf(RoleSystemKey.MEMBER),
+      );
       expect((await invitations.findById(invitation.id))?.status).toBe(
         InvitationStatus.ACCEPTED,
       );

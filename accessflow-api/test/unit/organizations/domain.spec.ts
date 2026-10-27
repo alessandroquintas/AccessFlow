@@ -3,9 +3,9 @@ import { Slug } from '@/modules/organizations/domain/value-objects/slug.vo';
 import { Organization } from '@/modules/organizations/domain/entities/organization.entity';
 import {
   Membership,
-  MembershipRole,
   MembershipStatus,
 } from '@/modules/organizations/domain/entities/membership.entity';
+import { Role } from '@/modules/organizations/domain/entities/role.entity';
 import { InvalidOrganizationError } from '@/modules/organizations/domain/errors/invalid-organization.error';
 import { InvalidMembershipError } from '@/modules/organizations/domain/errors/invalid-membership.error';
 
@@ -65,28 +65,38 @@ describe('Organization', () => {
 });
 
 describe('Membership', () => {
-  it('cria o OWNER ativo', () => {
-    const membership = Membership.createOwner('org-1', 'user-1');
+  const { owner, member } = Role.createDefaults('org-1', new Date());
 
-    expect(membership.role).toBe(MembershipRole.OWNER);
+  it('cria o OWNER ativo', () => {
+    const membership = Membership.create({
+      organizationId: 'org-1',
+      userId: 'user-1',
+      roleId: owner.id,
+    });
+
+    expect(membership.roleId).toBe(owner.id);
     expect(membership.isActive()).toBe(true);
-    expect(membership.isOwner()).toBe(true);
+    expect(owner.isOwner()).toBe(true);
   });
 
   it('owner removido deixa de ser tratado como owner', () => {
-    const membership = Membership.createOwner('org-1', 'user-1');
+    const membership = Membership.create({
+      organizationId: 'org-1',
+      userId: 'user-1',
+      roleId: owner.id,
+    });
 
     membership.remove();
 
     expect(membership.status).toBe(MembershipStatus.REMOVED);
-    expect(membership.isOwner()).toBe(false);
+    expect(membership.isActive()).toBe(false);
   });
 
   it('remover duas vezes é idempotente', () => {
     const membership = Membership.create({
       organizationId: 'org-1',
       userId: 'user-1',
-      role: MembershipRole.MEMBER,
+      roleId: member.id,
     });
     membership.remove();
     const removedAt = membership.updatedAt;
@@ -103,18 +113,18 @@ describe('Membership', () => {
         {
           organizationId: 'org-1',
           userId: 'user-1',
-          role: MembershipRole.MEMBER,
+          roleId: member.id,
         },
         joinedAt,
       );
       membership.remove(new Date('2026-01-02T00:00:00Z'));
       const now = new Date('2026-01-03T00:00:00Z');
 
-      membership.reactivate(MembershipRole.OWNER, now);
+      membership.reactivate(owner.id, now);
 
       expect(membership.status).toBe(MembershipStatus.ACTIVE);
-      expect(membership.role).toBe(MembershipRole.OWNER);
-      expect(membership.isOwner()).toBe(true);
+      expect(membership.roleId).toBe(owner.id);
+      expect(membership.isActive()).toBe(true);
       expect(membership.updatedAt).toEqual(now);
       expect(membership.createdAt).toEqual(joinedAt);
     });
@@ -123,13 +133,13 @@ describe('Membership', () => {
       const membership = Membership.create({
         organizationId: 'org-1',
         userId: 'user-1',
-        role: MembershipRole.MEMBER,
+        roleId: member.id,
       });
 
-      expect(() =>
-        membership.reactivate(MembershipRole.OWNER, new Date()),
-      ).toThrow(InvalidMembershipError);
-      expect(membership.role).toBe(MembershipRole.MEMBER);
+      expect(() => membership.reactivate(owner.id, new Date())).toThrow(
+        InvalidMembershipError,
+      );
+      expect(membership.roleId).toBe(member.id);
     });
   });
 });
