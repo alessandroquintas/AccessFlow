@@ -6,11 +6,14 @@ import { IdentityProfilePort } from '@/modules/identity/application/ports/identi
 import { FakeIdentityProfileProvider } from '@test/fakes/identity/fake-identity-profile-provider';
 import { MachineTokenVerifierPort } from '@/modules/identity/application/ports/machine-token-verifier.port';
 import { FakeMachineTokenVerifier } from '@test/fakes/identity/fake-machine-token-verifier';
+import { ClockPort } from '@/shared/application/ports/clock.port';
+import { SystemClock } from '@/shared/infrastructure/clock/system-clock';
 
 export async function createTestApp(
   tokenVerifier: TokenVerifierPort,
   identityProfile: IdentityProfilePort = new FakeIdentityProfileProvider(),
   machineTokenVerifier: MachineTokenVerifierPort = new FakeMachineTokenVerifier(),
+  clock: ClockPort = new SystemClock(),
 ): Promise<INestApplication> {
   const moduleRef = await Test.createTestingModule({ imports: [AppModule] })
     .overrideProvider(TokenVerifierPort)
@@ -19,6 +22,8 @@ export async function createTestApp(
     .useValue(identityProfile)
     .overrideProvider(MachineTokenVerifierPort)
     .useValue(machineTokenVerifier)
+    .overrideProvider(ClockPort)
+    .useValue(clock)
     .compile();
 
   const app = moduleRef.createNestApplication();

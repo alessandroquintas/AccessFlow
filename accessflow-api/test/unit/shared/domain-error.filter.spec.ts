@@ -7,6 +7,11 @@ import { OrganizationNotFoundError } from '@/modules/organizations/domain/errors
 import { InvalidAccessTokenError } from '@/modules/identity/application/errors/invalid-access-token.error';
 import { InsufficientScopeError } from '@/modules/identity/application/errors/insufficient-scope.error';
 import { InvalidCursorError } from '@/shared/application/errors/invalid-cursor.error';
+import { InvalidEmailError } from '@/shared/domain/errors/invalid-email.error';
+import { InvitationNotFoundError } from '@/modules/organizations/domain/errors/invitation-not-found.error';
+import { AlreadyMemberError } from '@/modules/organizations/domain/errors/already-member.error';
+import { InvitationLimitReachedError } from '@/modules/organizations/domain/errors/invitation-limit-reached.error';
+import { InvalidInvitationError } from '@/modules/organizations/domain/errors/invalid-invitation.error';
 
 const response = { tipo: 'resposta-http' };
 
@@ -55,6 +60,11 @@ describe('DomainErrorFilter', () => {
       [new InvalidAccessTokenError(), 'UNAUTHENTICATED'],
       [new InsufficientScopeError(), 'FORBIDDEN'],
       [new InvalidCursorError(), 'BAD_REQUEST'],
+      [new InvitationNotFoundError(), 'NOT_FOUND'],
+      [new AlreadyMemberError(), 'CONFLICT'],
+      [new InvitationLimitReachedError(), 'CONFLICT'],
+      [new InvalidEmailError(), 'BAD_REQUEST'],
+      [new InvalidInvitationError('id é obrigatório.'), 'BAD_REQUEST'],
     ])('traduz %s para %s', (error, code) => {
       const result = sut.catch(error, graphqlHost()) as GraphQLError;
 

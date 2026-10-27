@@ -24,9 +24,20 @@ import { IntegrationClientRepository } from './domain/repositories/integration-c
 import { PrismaIntegrationClientRepository } from './infrastructure/persistence/prisma-integration-client.repository';
 import { CheckMembershipForIntegrationUseCase } from './application/use-cases/check-membership-for-integration.use-case';
 import { IntegrationMembersController } from './presentation/http/controllers/integration-members.controller';
+import { ClockModule } from '@/shared/infrastructure/clock/clock.module';
+import { ClockPort } from '@/shared/application/ports/clock.port';
+import { InvitationRepository } from './domain/repositories/invitation.repository';
+import { PrismaInvitationRepository } from './infrastructure/persistence/prisma-invitation.repository';
+import { InviteMemberUseCase } from './application/use-cases/invite-member.use-case';
+import { ListOrganizationInvitationsUseCase } from './application/use-cases/list-organization-invitations.use-case';
+import { RevokeInvitationUseCase } from './application/use-cases/revoke-invitation.use-case';
+import { ListMyInvitationsUseCase } from './application/use-cases/list-my-invitations.use-case';
+import { AcceptInvitationUseCase } from './application/use-cases/accept-invitation.use-case';
+import { DeclineInvitationUseCase } from './application/use-cases/decline-invitation.use-case';
+import { InvitationsResolver } from './presentation/graphql/resolvers/invitations.resolver';
 
 @Module({
-  imports: [PrismaModule, IdentityModule],
+  imports: [PrismaModule, IdentityModule, ClockModule],
   controllers: [IntegrationMembersController],
   providers: [
     // Persistência
@@ -36,6 +47,7 @@ import { IntegrationMembersController } from './presentation/http/controllers/in
       provide: IntegrationClientRepository,
       useClass: PrismaIntegrationClientRepository,
     },
+    { provide: InvitationRepository, useClass: PrismaInvitationRepository },
 
     // Adaptador para o módulo Identity
     {
@@ -167,9 +179,98 @@ import { IntegrationMembersController } from './presentation/http/controllers/in
         ),
     },
 
+    {
+      provide: InviteMemberUseCase,
+      inject: [
+        InvitationRepository,
+        MembershipRepository,
+        UserDirectoryPort,
+        OrganizationAccessService,
+        ClockPort,
+      ],
+      useFactory: (
+        invitations: InvitationRepository,
+        memberships: MembershipRepository,
+        users: UserDirectoryPort,
+        access: OrganizationAccessService,
+        clock: ClockPort,
+      ) =>
+        new InviteMemberUseCase(invitations, memberships, users, access, clock),
+    },
+    {
+      provide: ListOrganizationInvitationsUseCase,
+      inject: [
+        InvitationRepository,
+        UserDirectoryPort,
+        OrganizationAccessService,
+      ],
+      useFactory: (
+        invitations: InvitationRepository,
+        users: UserDirectoryPort,
+        access: OrganizationAccessService,
+      ) => new ListOrganizationInvitationsUseCase(invitations, users, access),
+    },
+    {
+      provide: RevokeInvitationUseCase,
+      inject: [
+        InvitationRepository,
+        UserDirectoryPort,
+        OrganizationAccessService,
+        ClockPort,
+      ],
+      useFactory: (
+        invitations: InvitationRepository,
+        users: UserDirectoryPort,
+        access: OrganizationAccessService,
+        clock: ClockPort,
+      ) => new RevokeInvitationUseCase(invitations, users, access, clock),
+    },
+    {
+      provide: ListMyInvitationsUseCase,
+      inject: [
+        InvitationRepository,
+        OrganizationRepository,
+        UserDirectoryPort,
+        ClockPort,
+      ],
+      useFactory: (
+        invitations: InvitationRepository,
+        organizations: OrganizationRepository,
+        users: UserDirectoryPort,
+        clock: ClockPort,
+      ) =>
+        new ListMyInvitationsUseCase(invitations, organizations, users, clock),
+    },
+    {
+      provide: AcceptInvitationUseCase,
+      inject: [
+        InvitationRepository,
+        OrganizationRepository,
+        UserDirectoryPort,
+        ClockPort,
+      ],
+      useFactory: (
+        invitations: InvitationRepository,
+        organizations: OrganizationRepository,
+        users: UserDirectoryPort,
+        clock: ClockPort,
+      ) =>
+        new AcceptInvitationUseCase(invitations, organizations, users, clock),
+    },
+    {
+      provide: DeclineInvitationUseCase,
+      inject: [InvitationRepository, UserDirectoryPort, ClockPort],
+      useFactory: (
+        invitations: InvitationRepository,
+        users: UserDirectoryPort,
+        clock: ClockPort,
+      ) => new DeclineInvitationUseCase(invitations, users, clock),
+    },
+
     // Apresentação
     OrganizationsResolver,
     MembersResolver,
+    InvitationsResolver,
   ],
 })
 export class OrganizationsModule {}

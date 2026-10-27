@@ -15,14 +15,55 @@ A date-time string at UTC, such as 2019-12-03T09:54:33Z, compliant with the date
 """
 scalar DateTime
 
+type InvitationInviter {
+  name: String!
+  userId: ID!
+}
+
+type InvitationOrganization {
+  id: ID!
+  name: String!
+  slug: String!
+}
+
+"""EXPIRED é calculado: um convite PENDING com o prazo vencido."""
+enum InvitationStatus {
+  ACCEPTED
+  DECLINED
+  EXPIRED
+  PENDING
+  REVOKED
+}
+
+input InviteMemberInput {
+  """E-mail da pessoa convidada."""
+  email: String!
+
+  """Papel ao aceitar. Convidar como OWNER exige ser OWNER."""
+  role: MembershipRole!
+}
+
 enum MembershipRole {
   MEMBER
   OWNER
 }
 
 type Mutation {
+  """
+  Aceita um convite para o e-mail do usuário autenticado e devolve a organização.
+  """
+  acceptInvitation(invitationId: ID!): Organization!
+
   """Cria uma organização. O usuário autenticado se torna OWNER."""
   createOrganization(input: CreateOrganizationInput!): Organization!
+
+  """Recusa um convite para o e-mail do usuário autenticado."""
+  declineInvitation(invitationId: ID!): Boolean!
+
+  """
+  Convida um e-mail para a organização. Convidar de novo o mesmo e-mail renova o convite pendente. Exige members:invite.
+  """
+  inviteMember(input: InviteMemberInput!, organizationId: ID!): OrganizationInvitation!
 
   """O usuário autenticado sai da organização."""
   leaveOrganization(organizationId: ID!): Boolean!
@@ -35,6 +76,9 @@ type Mutation {
   """Remove um membro da organização. Exige ser OWNER."""
   removeMember(organizationId: ID!, userId: ID!): Boolean!
 
+  """Revoga um convite pendente, mesmo expirado. Exige members:invite."""
+  revokeInvitation(invitationId: ID!, organizationId: ID!): Boolean!
+
   """
   Atualiza o perfil do usuário autenticado. O e-mail vem do Cognito e não é editável.
   """
@@ -42,6 +86,18 @@ type Mutation {
 
   """Atualiza os dados da organização. """
   updateOrganization(input: UpdateOrganizationInput!, organizationId: ID!): Organization!
+}
+
+type MyInvitation {
+  expiresAt: DateTime!
+  id: ID!
+
+  """Nome de quem fez o convite ou a última renovação."""
+  invitedByName: String!
+  organization: InvitationOrganization!
+
+  """Papel ao aceitar o convite."""
+  role: MembershipRole!
 }
 
 type Organization {
@@ -55,10 +111,33 @@ type Organization {
   viewerRole: MembershipRole!
 }
 
+type OrganizationInvitation {
+  createdAt: DateTime!
+  email: String!
+
+  """Fim do prazo para aceitar. Reconvidar renova por 7 dias."""
+  expiresAt: DateTime!
+  id: ID!
+
+  """Quem fez o convite ou a última renovação."""
+  invitedBy: InvitationInviter!
+
+  """Papel ao aceitar o convite."""
+  role: MembershipRole!
+  status: InvitationStatus!
+}
+
+type OrganizationInvitationConnection {
+  nodes: [OrganizationInvitation!]!
+  pageInfo: PageInfo!
+}
+
 type OrganizationMember {
   email: String!
 
-  """Quando o usuário entrou na organização."""
+  """
+  Data da primeira entrada na organização. Não muda se o membro sair e voltar por um novo convite.
+  """
   joinedAt: DateTime!
   name: String!
   role: MembershipRole!
@@ -89,11 +168,19 @@ type Query {
   """Perfil do usuário autenticado."""
   me: User!
 
+  """Convites pendentes e no prazo para o e-mail do usuário autenticado."""
+  myInvitations: [MyInvitation!]!
+
   """Organizações das quais o usuário autenticado é membro ativo."""
   myOrganizations: [Organization!]!
 
   """Uma organização da qual o usuário autenticado é membro."""
   organization(organizationId: ID!): Organization!
+
+  """
+  Convites pendentes da organização, expirados incluídos, do mais recente para o mais antigo. Exige members:invite.
+  """
+  organizationInvitations(after: String, first: Int, organizationId: ID!): OrganizationInvitationConnection!
 
   """Membros ativos da organização, do mais antigo para o mais recente."""
   organizationMembers(after: String, first: Int, organizationId: ID!): OrganizationMemberConnection!

@@ -119,5 +119,7 @@ model User {
   memberships     Membership[]
   invitationsSent Invitation[]
 
+  // inviteMember (ALREADY_MEMBER) e myInvitations buscam por e-mail.
+  @@index([email])
   @@map("users")
 }

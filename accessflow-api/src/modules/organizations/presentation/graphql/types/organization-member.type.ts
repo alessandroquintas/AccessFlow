@@ -16,7 +16,10 @@ export class OrganizationMemberType {
   @Field(() => MembershipRole)
   role!: MembershipRole;
 
-  @Field({ description: 'Quando o usuário entrou na organização.' })
+  @Field({
+    description:
+      'Data da primeira entrada na organização. Não muda se o membro sair e voltar por um novo convite.',
+  })
   joinedAt!: Date;
 
   static from({

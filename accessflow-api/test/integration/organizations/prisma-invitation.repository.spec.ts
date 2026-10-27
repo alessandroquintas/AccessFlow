@@ -1,9 +1,18 @@
-import { afterAll, beforeAll, beforeEach, describe, expect, it } from 'vitest';
+import {
+  afterAll,
+  beforeAll,
+  beforeEach,
+  describe,
+  expect,
+  it,
+  vi,
+} from 'vitest';
 import { PrismaService } from '@/shared/infrastructure/database/prisma.service';
 import { Organization } from '@/modules/organizations/domain/entities/organization.entity';
 import {
   Membership,
   MembershipRole,
+  MembershipStatus,
 } from '@/modules/organizations/domain/entities/membership.entity';
 import {
   Invitation,
@@ -15,6 +24,10 @@ import { PrismaOrganizationRepository } from '@/modules/organizations/infrastruc
 import { PrismaInvitationRepository } from '@/modules/organizations/infrastructure/persistence/prisma-invitation.repository';
 import { PrismaInvitationMapper } from '@/modules/organizations/infrastructure/persistence/mappers/prisma-invitation.mapper';
 import { PrismaMembershipMapper } from '@/modules/organizations/infrastructure/persistence/mappers/prisma-membership.mapper';
+import { PrismaMembershipRepository } from '@/modules/organizations/infrastructure/persistence/prisma-membership.repository';
+import { AcceptInvitationUseCase } from '@/modules/organizations/application/use-cases/accept-invitation.use-case';
+import { FakeUserDirectory } from '@test/fakes/organizations/fake-user-directory';
+import { FixedClock } from '@test/fakes/shared/fixed-clock';
 
 const DAY = 24 * 60 * 60 * 1000;
 const NOW = new Date('2026-03-01T12:00:00.000Z');
@@ -477,7 +490,36 @@ describe('PrismaInvitationRepository (integração)', () => {
   });
 
   describe('accept', () => {
-    it('cria o membership com o papel do convite e marca como aceito', async () => {
+    async function addMembership(
+      userId: string,
+      role: MembershipRole,
+      removedAt?: Date,
+    ) {
+      const membership = Membership.create(
+        { organizationId: acme.id, userId, role },
+        at(-10 * DAY),
+      );
+      if (removedAt) membership.remove(removedAt);
+      await prisma.membership.create({
+        data: PrismaMembershipMapper.toPersistence(membership),
+      });
+      return membership;
+    }
+
+    async function membershipsOf(userId: string) {
+      return prisma.membership.findMany({
+        where: { organizationId: acme.id, userId },
+      });
+    }
+
+    async function statusOf(invitation: Invitation) {
+      const record = await prisma.invitation.findUniqueOrThrow({
+        where: { id: invitation.id },
+      });
+      return record.status;
+    }
+
+    it('sem membership: cria com o papel do convite e marca como aceito', async () => {
       const bruno = await createUser('sub-bruno');
       const invitation = makeInvitation(
         acme.id,
@@ -489,43 +531,29 @@ describe('PrismaInvitationRepository (integração)', () => {
       await insert(invitation);
 
       invitation.accept(at(DAY));
-      await invitations.accept(
-        invitation,
-        Membership.create(
-          { organizationId: acme.id, userId: bruno.id, role: invitation.role },
-          at(DAY),
-        ),
-      );
-
-      const membership = await prisma.membership.findUniqueOrThrow({
-        where: {
-          organizationId_userId: { organizationId: acme.id, userId: bruno.id },
-        },
+      const membership = await invitations.accept(invitation, {
+        userId: bruno.id,
+        now: at(DAY),
       });
-      expect(membership).toMatchObject({ role: 'OWNER', status: 'ACTIVE' });
-      expect(
-        (
-          await prisma.invitation.findUniqueOrThrow({
-            where: { id: invitation.id },
-          })
-        ).status,
-      ).toBe('ACCEPTED');
+
+      expect(membership).toMatchObject({
+        userId: bruno.id,
+        role: MembershipRole.OWNER,
+        createdAt: at(DAY),
+      });
+      expect(await membershipsOf(bruno.id)).toMatchObject([
+        { id: membership.id, role: 'OWNER', status: 'ACTIVE' },
+      ]);
+      expect(await statusOf(invitation)).toBe('ACCEPTED');
     });
 
-    it('reativa o membership REMOVED com o papel do convite, sem criar outro', async () => {
+    it('membership REMOVED: reativa o mesmo com o papel do convite', async () => {
       const bruno = await createUser('sub-bruno');
-      const old = Membership.create(
-        {
-          organizationId: acme.id,
-          userId: bruno.id,
-          role: MembershipRole.OWNER,
-        },
-        at(-10 * DAY),
+      const old = await addMembership(
+        bruno.id,
+        MembershipRole.OWNER,
+        at(-5 * DAY),
       );
-      old.remove(at(-5 * DAY));
-      await prisma.membership.create({
-        data: PrismaMembershipMapper.toPersistence(old),
-      });
       const invitation = makeInvitation(
         acme.id,
         ana.id,
@@ -534,20 +562,111 @@ describe('PrismaInvitationRepository (integração)', () => {
       await insert(invitation);
 
       invitation.accept(at(DAY));
-      old.reactivate(invitation.role, at(DAY));
-      await invitations.accept(invitation, old);
+      const membership = await invitations.accept(invitation, {
+        userId: bruno.id,
+        now: at(DAY),
+      });
 
-      const records = await prisma.membership.findMany({
-        where: { organizationId: acme.id, userId: bruno.id },
+      expect(membership.id).toBe(old.id);
+      expect(await membershipsOf(bruno.id)).toMatchObject([
+        {
+          id: old.id,
+          role: 'MEMBER',
+          status: 'ACTIVE',
+          updatedAt: at(DAY),
+          createdAt: at(-10 * DAY),
+        },
+      ]);
+    });
+
+    it('membership ACTIVE: mantém papel e status e consome o convite', async () => {
+      const bruno = await createUser('sub-bruno');
+      const current = await addMembership(bruno.id, MembershipRole.MEMBER);
+      const invitation = makeInvitation(
+        acme.id,
+        ana.id,
+        'sub-bruno@example.com',
+        NOW,
+        MembershipRole.OWNER,
+      );
+      await insert(invitation);
+
+      invitation.accept(at(DAY));
+      const membership = await invitations.accept(invitation, {
+        userId: bruno.id,
+        now: at(DAY),
       });
-      expect(records).toHaveLength(1);
-      expect(records[0]).toMatchObject({
-        id: old.id,
-        role: 'MEMBER',
-        status: 'ACTIVE',
-        updatedAt: at(DAY),
-        createdAt: at(-10 * DAY),
+
+      expect(membership.role).toBe(MembershipRole.MEMBER);
+      expect(await membershipsOf(bruno.id)).toMatchObject([
+        {
+          id: current.id,
+          role: 'MEMBER',
+          status: 'ACTIVE',
+          updatedAt: at(-10 * DAY),
+        },
+      ]);
+      expect(await statusOf(invitation)).toBe('ACCEPTED');
+    });
+
+    it('membership removido depois que o caso de uso leu o estado ativo: reativa com o papel do convite', async () => {
+      const bruno = await createUser('sub-bruno');
+      const current = await addMembership(bruno.id, MembershipRole.OWNER);
+      const invitation = makeInvitation(
+        acme.id,
+        ana.id,
+        'sub-bruno@example.com',
+      );
+      await insert(invitation);
+
+      const users = new FakeUserDirectory();
+      users.register('sub-bruno', bruno.id, { email: 'sub-bruno@example.com' });
+      const memberships = new PrismaMembershipRepository(prisma);
+      const sut = new AcceptInvitationUseCase(
+        invitations,
+        organizations,
+        users,
+        new FixedClock(at(DAY)),
+      );
+
+      // Entre as leituras do caso de uso e a transação do aceite, uma remoção
+      // concorrente termina. Antes, o caso de uso decidia "já é membro" com o
+      // estado lido e o aceite gravava o membership de volta como OWNER ativo.
+      const accept = invitations.accept.bind(invitations);
+      vi.spyOn(invitations, 'accept').mockImplementationOnce(
+        async (...args) => {
+          const seen = await memberships.findByOrganizationAndUser(
+            acme.id,
+            bruno.id,
+          );
+          expect(seen?.isActive()).toBe(true);
+          await prisma.membership.update({
+            where: { id: current.id },
+            data: { status: 'REMOVED', updatedAt: NOW },
+          });
+          return accept(...args);
+        },
+      );
+
+      const result = await sut.execute({
+        cognitoSub: 'sub-bruno',
+        invitationId: invitation.id,
       });
+
+      expect(result.membership).toMatchObject({
+        id: current.id,
+        role: MembershipRole.MEMBER,
+        status: MembershipStatus.ACTIVE,
+      });
+      expect(await membershipsOf(bruno.id)).toMatchObject([
+        {
+          id: current.id,
+          role: 'MEMBER',
+          status: 'ACTIVE',
+          updatedAt: at(DAY),
+        },
+      ]);
+      expect(await statusOf(invitation)).toBe('ACCEPTED');
     });
 
     it('convite que já não está PENDING não cria membership', async () => {
@@ -564,19 +683,11 @@ describe('PrismaInvitationRepository (integração)', () => {
 
       stale.accept(at(DAY));
       await expect(
-        invitations.accept(
-          stale,
-          Membership.create({
-            organizationId: acme.id,
-            userId: bruno.id,
-            role: stale.role,
-          }),
-        ),
+        invitations.accept(stale, { userId: bruno.id, now: at(DAY) }),
       ).rejects.toBeInstanceOf(InvitationNotFoundError);
 
-      expect(
-        await prisma.membership.count({ where: { userId: bruno.id } }),
-      ).toBe(0);
+      expect(await membershipsOf(bruno.id)).toHaveLength(0);
+      expect(await statusOf(invitation)).toBe('REVOKED');
     });
 
     it('concorrência: dois aceites simultâneos, UM sucesso e UM membership', async () => {
@@ -591,19 +702,15 @@ describe('PrismaInvitationRepository (integração)', () => {
         [bruno, brunoOutro].map(async (user) => {
           const copy = (await invitations.findById(invitation.id))!;
           copy.accept(at(DAY));
-          return {
-            invitation: copy,
-            membership: Membership.create(
-              { organizationId: acme.id, userId: user.id, role: copy.role },
-              at(DAY),
-            ),
-          };
+          return { invitation: copy, userId: user.id };
         }),
       );
       await warmPool();
 
       const results = await Promise.allSettled(
-        attempts.map((a) => invitations.accept(a.invitation, a.membership)),
+        attempts.map((a) =>
+          invitations.accept(a.invitation, { userId: a.userId, now: at(DAY) }),
+        ),
       );
 
       const rejected = results.filter((r) => r.status === 'rejected');

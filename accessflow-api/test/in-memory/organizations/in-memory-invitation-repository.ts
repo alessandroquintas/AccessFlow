@@ -133,19 +133,32 @@ export class InMemoryInvitationRepository extends InvitationRepository {
     this.writeIfPending(invitation);
   }
 
-  async accept(invitation: Invitation, membership: Membership): Promise<void> {
+  async accept(
+    invitation: Invitation,
+    { userId, now }: { userId: string; now: Date },
+  ): Promise<Membership> {
     this.writeIfPending(invitation);
 
-    const index = this.memberships.items.findIndex(
+    const existing = this.memberships.items.find(
       (m) =>
-        m.organizationId === membership.organizationId &&
-        m.userId === membership.userId,
+        m.organizationId === invitation.organizationId && m.userId === userId,
     );
-    if (index >= 0) {
-      this.memberships.items[index] = membership;
-    } else {
-      this.memberships.items.push(membership);
+    if (!existing) {
+      const created = Membership.create(
+        {
+          organizationId: invitation.organizationId,
+          userId,
+          role: invitation.role,
+        },
+        now,
+      );
+      this.memberships.items.push(created);
+      return created;
     }
+
+    // Mesma regra do Prisma: ativo fica como está, REMOVED é reativado.
+    if (!existing.isActive()) existing.reactivate(invitation.role, now);
+    return existing;
   }
 
   /** Mesma regra do UPDATE condicional do Prisma. */

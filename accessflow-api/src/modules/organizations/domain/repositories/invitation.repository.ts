@@ -47,13 +47,17 @@ export abstract class InvitationRepository {
   abstract respond(invitation: Invitation): Promise<void>;
 
   /**
-   * Marca o convite (já ACCEPTED na entidade) como aceito e grava o
-   * membership: cria, ou atualiza papel e status do existente para o mesmo
-   * (organização, usuário). Atômico; se o convite já não estiver PENDING no
-   * banco, lança InvitationNotFoundError e nada muda.
+   * Marca o convite (já ACCEPTED na entidade) como aceito e devolve o
+   * membership do usuário na organização, decidido com o estado atual do
+   * banco, dentro da mesma transação:
+   * - membership ACTIVE: mantém papel e status;
+   * - membership REMOVED: reativa com o papel do convite em `now`;
+   * - sem membership: cria com o papel do convite em `now`.
+   * Atômico; se o convite já não estiver PENDING no banco, lança
+   * InvitationNotFoundError e nada muda.
    */
   abstract accept(
     invitation: Invitation,
-    membership: Membership,
-  ): Promise<void>;
+    options: { userId: string; now: Date },
+  ): Promise<Membership>;
 }

@@ -1,9 +1,6 @@
 import { ClockPort } from '@/shared/application/ports/clock.port';
-import { Invitation } from '../../domain/entities/invitation.entity';
-import { Membership } from '../../domain/entities/membership.entity';
 import { InvitationNotFoundError } from '../../domain/errors/invitation-not-found.error';
 import { InvitationRepository } from '../../domain/repositories/invitation.repository';
-import { MembershipRepository } from '../../domain/repositories/membership.repository';
 import { OrganizationRepository } from '../../domain/repositories/organization.repository';
 import { OrganizationWithMembership } from '../dto/organization-with-membership';
 import { UserDirectoryPort } from '../ports/user-directory.port';
@@ -18,7 +15,6 @@ export class AcceptInvitationUseCase {
   constructor(
     private readonly invitations: InvitationRepository,
     private readonly organizations: OrganizationRepository,
-    private readonly memberships: MembershipRepository,
     private readonly users: UserDirectoryPort,
     private readonly clock: ClockPort,
   ) {}
@@ -41,40 +37,14 @@ export class AcceptInvitationUseCase {
     );
     if (!organization?.isActive()) throw new InvitationNotFoundError();
 
-    const existing = await this.memberships.findByOrganizationAndUser(
-      invitation.organizationId,
-      user.id,
-    );
-    const membership = this.membershipFor(existing, invitation, user.id, now);
-
+    // Manter, reativar ou criar o membership é decidido dentro da transação
+    // do repositório, com o estado do banco já travado.
     invitation.accept(now);
-    await this.invitations.accept(invitation, membership);
+    const membership = await this.invitations.accept(invitation, {
+      userId: user.id,
+      now,
+    });
 
     return { organization, membership };
-  }
-
-  /** Nunca cria um segundo membership para o mesmo (organização, usuário). */
-  private membershipFor(
-    existing: Membership | null,
-    invitation: Invitation,
-    userId: string,
-    now: Date,
-  ): Membership {
-    // Já é membro: o convite é consumido e o papel atual não muda.
-    if (existing?.isActive()) return existing;
-
-    if (existing) {
-      existing.reactivate(invitation.role, now);
-      return existing;
-    }
-
-    return Membership.create(
-      {
-        organizationId: invitation.organizationId,
-        userId,
-        role: invitation.role,
-      },
-      now,
-    );
   }
 }

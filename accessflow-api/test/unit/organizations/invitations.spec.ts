@@ -172,7 +172,6 @@ describe('Convites', () => {
     acceptInvitation = new AcceptInvitationUseCase(
       invitations,
       organizations,
-      memberships,
       users,
       clock,
     );
@@ -237,6 +236,8 @@ describe('Convites', () => {
     it('convidar como OWNER exige ser OWNER, mesmo com members:invite', async () => {
       // Nenhum papel fixo tem members:invite sem ser OWNER; simula o que o
       // RBAC da Fase 8 vai permitir.
+      // TODO(Fase 8): reescrever com um papel real que tenha members:invite
+      // sem ser OWNER, quando houver papéis configuráveis, e remover o spy.
       const [member] = membershipOf(MEMBER.id);
       vi.spyOn(member, 'can').mockReturnValue(true);
       const input = {

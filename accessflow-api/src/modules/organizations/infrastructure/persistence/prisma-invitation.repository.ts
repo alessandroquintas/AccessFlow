@@ -135,8 +135,13 @@ export class PrismaInvitationRepository extends InvitationRepository {
     if (count === 0) throw new InvitationNotFoundError();
   }
 
-  async accept(invitation: Invitation, membership: Membership): Promise<void> {
-    await this.prisma.$transaction(async (tx) => {
+  async accept(
+    invitation: Invitation,
+    { userId, now }: { userId: string; now: Date },
+  ): Promise<Membership> {
+    const { organizationId } = invitation;
+
+    return this.prisma.$transaction(async (tx) => {
       // Trava o convite: um segundo aceite espera aqui e, ao seguir, já o
       // encontra ACCEPTED.
       const [locked] = await tx.$queryRaw<
@@ -146,21 +151,34 @@ export class PrismaInvitationRepository extends InvitationRepository {
         throw new InvitationNotFoundError();
       }
 
-      const data = PrismaMembershipMapper.toPersistence(membership);
-      await tx.membership.upsert({
-        where: {
-          organizationId_userId: {
-            organizationId: membership.organizationId,
-            userId: membership.userId,
-          },
-        },
-        create: data,
-        update: {
-          role: data.role,
-          status: data.status,
-          updatedAt: data.updatedAt,
-        },
+      // Decide com o estado lido aqui, e não com o que o caso de uso viu
+      // antes: uma remoção que terminou nesse intervalo já aparece.
+      const record = await tx.membership.findUnique({
+        where: { organizationId_userId: { organizationId, userId } },
       });
+
+      let membership: Membership;
+      if (!record) {
+        membership = Membership.create(
+          { organizationId, userId, role: invitation.role },
+          now,
+        );
+        await tx.membership.create({
+          data: PrismaMembershipMapper.toPersistence(membership),
+        });
+      } else {
+        membership = PrismaMembershipMapper.toDomain(record);
+        // Já é membro ativo: o convite é consumido e o papel não muda.
+        if (!membership.isActive()) {
+          membership.reactivate(invitation.role, now);
+          const { role, status, updatedAt } =
+            PrismaMembershipMapper.toPersistence(membership);
+          await tx.membership.update({
+            where: { id: membership.id },
+            data: { role, status, updatedAt },
+          });
+        }
+      }
 
       const { status, updatedAt } =
         PrismaInvitationMapper.toPersistence(invitation);
@@ -168,6 +186,8 @@ export class PrismaInvitationRepository extends InvitationRepository {
         where: { id: invitation.id },
         data: { status, updatedAt },
       });
+
+      return membership;
     });
   }
 }
