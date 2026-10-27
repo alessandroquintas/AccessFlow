@@ -12,6 +12,14 @@ import { InvitationNotFoundError } from '@/modules/organizations/domain/errors/i
 import { AlreadyMemberError } from '@/modules/organizations/domain/errors/already-member.error';
 import { InvitationLimitReachedError } from '@/modules/organizations/domain/errors/invitation-limit-reached.error';
 import { InvalidInvitationError } from '@/modules/organizations/domain/errors/invalid-invitation.error';
+import { InvalidPermissionError } from '@/modules/organizations/domain/errors/invalid-permission.error';
+import { InvalidRoleError } from '@/modules/organizations/domain/errors/invalid-role.error';
+import { RoleNameTakenError } from '@/modules/organizations/domain/errors/role-name-taken.error';
+import { RoleLimitReachedError } from '@/modules/organizations/domain/errors/role-limit-reached.error';
+import { SystemRoleImmutableError } from '@/modules/organizations/domain/errors/system-role-immutable.error';
+import { RoleInUseError } from '@/modules/organizations/domain/errors/role-in-use.error';
+import { RoleNotFoundError } from '@/modules/organizations/domain/errors/role-not-found.error';
+import { PrivilegeEscalationError } from '@/modules/organizations/domain/errors/privilege-escalation.error';
 
 const response = { tipo: 'resposta-http' };
 
@@ -65,6 +73,14 @@ describe('DomainErrorFilter', () => {
       [new InvitationLimitReachedError(), 'CONFLICT'],
       [new InvalidEmailError(), 'BAD_REQUEST'],
       [new InvalidInvitationError('id é obrigatório.'), 'BAD_REQUEST'],
+      [new InvalidPermissionError('x:y'), 'BAD_REQUEST'],
+      [new InvalidRoleError('name é obrigatório.'), 'BAD_REQUEST'],
+      [new RoleNameTakenError(), 'CONFLICT'],
+      [new RoleLimitReachedError(), 'CONFLICT'],
+      [new SystemRoleImmutableError('imutável'), 'CONFLICT'],
+      [new RoleInUseError(), 'CONFLICT'],
+      [new RoleNotFoundError(), 'NOT_FOUND'],
+      [new PrivilegeEscalationError(), 'FORBIDDEN'],
     ])('traduz %s para %s', (error, code) => {
       const result = sut.catch(error, graphqlHost()) as GraphQLError;
 

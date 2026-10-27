@@ -1,4 +1,4 @@
-import { beforeEach, describe, expect, it } from 'vitest';
+import { beforeEach, describe, expect, it, vi } from 'vitest';
 import {
   Organization,
   OrganizationStatus,
@@ -7,7 +7,10 @@ import {
   Membership,
   MembershipStatus,
 } from '@/modules/organizations/domain/entities/membership.entity';
-import { RoleSystemKey } from '@/modules/organizations/domain/entities/role.entity';
+import {
+  Role,
+  RoleSystemKey,
+} from '@/modules/organizations/domain/entities/role.entity';
 import { OrganizationPermission } from '@/modules/organizations/policies/organization-permission';
 import {
   Invitation,
@@ -28,6 +31,9 @@ import { InvitationNotFoundError } from '@/modules/organizations/domain/errors/i
 import { InvitationLimitReachedError } from '@/modules/organizations/domain/errors/invitation-limit-reached.error';
 import { OrganizationNotFoundError } from '@/modules/organizations/domain/errors/organization-not-found.error';
 import { OrganizationPermissionDeniedError } from '@/modules/organizations/domain/errors/organization-permission-denied.error';
+import { PrivilegeEscalationError } from '@/modules/organizations/domain/errors/privilege-escalation.error';
+import { InvalidInvitationError } from '@/modules/organizations/domain/errors/invalid-invitation.error';
+import { RoleNotFoundError } from '@/modules/organizations/domain/errors/role-not-found.error';
 import { UserInactiveError } from '@/modules/identity/domain/errors/user-inactive.error';
 import { InvalidEmailError } from '@/shared/domain/errors/invalid-email.error';
 import { InMemoryOrganizationRepository } from '@test/in-memory/organizations/in-memory-organization-repository';
@@ -86,6 +92,20 @@ function createOrganization(slug: string): Organization {
 /** Id do papel de sistema da organização. */
 function roleIdOf(systemKey: RoleSystemKey, organization = acme): string {
   return roles.systemRole(organization.id, systemKey).id;
+}
+
+/** Grava um papel customizado direto no repositório. */
+function seedCustomRole(
+  name: string,
+  permissions: string[],
+  organization = acme,
+): Role {
+  const role = Role.create(
+    { organizationId: organization.id, name, permissions },
+    START,
+  );
+  roles.seed(role);
+  return role;
 }
 
 function addMember(
@@ -201,6 +221,7 @@ describe('Convites', () => {
       organizations,
       roles,
       users,
+      transactions,
       clock,
     );
     declineInvitation = new DeclineInvitationUseCase(invitations, users, clock);
@@ -275,7 +296,7 @@ describe('Convites', () => {
 
       await expect(
         inviteMember.execute({ ...input, role: RoleSystemKey.OWNER }),
-      ).rejects.toBeInstanceOf(OrganizationPermissionDeniedError);
+      ).rejects.toBeInstanceOf(PrivilegeEscalationError);
       expect(invitations.items).toHaveLength(0);
 
       const { invitation } = await inviteMember.execute({
@@ -433,6 +454,131 @@ describe('Convites', () => {
 
         await expect(invite(INVITEE.email)).resolves.toBeDefined();
       });
+    });
+  });
+
+  describe('InviteMemberUseCase com roleId', () => {
+    const { MEMBERS_READ, MEMBERS_INVITE, MEMBERS_REMOVE } =
+      OrganizationPermission;
+
+    function inviteAs(
+      who: { sub: string },
+      choice: { role?: RoleSystemKey | null; roleId?: string | null },
+    ) {
+      return inviteMember.execute({
+        cognitoSub: who.sub,
+        organizationId: acme.id,
+        email: INVITEE.email,
+        ...choice,
+      });
+    }
+
+    /** O MEMBER passa a ter o papel informado. */
+    function giveMemberRole(role: Role): void {
+      membershipOf(MEMBER.id)[0].changeRole(role.id, START);
+    }
+
+    it('convida com um papel customizado, com o id normalizado', async () => {
+      const finance = seedCustomRole('Financeiro', [MEMBERS_READ]);
+
+      const result = await inviteAs(OWNER, {
+        roleId: finance.id.toUpperCase(),
+      });
+
+      expect(result.invitation.roleId).toBe(finance.id);
+      expect(result.role.id).toBe(finance.id);
+      expect(invitations.items).toHaveLength(1);
+    });
+
+    it('roleId de papel de sistema também vale; null conta como ausente', async () => {
+      const byId = await inviteAs(OWNER, {
+        role: null,
+        roleId: roleIdOf(RoleSystemKey.OWNER),
+      });
+      expect(byId.invitation.roleId).toBe(roleIdOf(RoleSystemKey.OWNER));
+
+      const byKey = await inviteAs(OWNER, {
+        role: RoleSystemKey.MEMBER,
+        roleId: null,
+      });
+      expect(byKey.invitation.roleId).toBe(roleIdOf(RoleSystemKey.MEMBER));
+    });
+
+    it.each([
+      [
+        'os dois',
+        () => ({
+          role: RoleSystemKey.MEMBER,
+          roleId: roleIdOf(RoleSystemKey.MEMBER),
+        }),
+      ],
+      ['nenhum', () => ({})],
+      ['os dois nulos', () => ({ role: null, roleId: null })],
+    ])('exige exatamente um entre role e roleId: %s', async (_, choice) => {
+      await expect(inviteAs(OWNER, choice())).rejects.toBeInstanceOf(
+        InvalidInvitationError,
+      );
+      expect(invitations.items).toHaveLength(0);
+    });
+
+    it.each([
+      ['malformado', () => 'nao-e-uuid'],
+      ['inexistente', () => '55555555-5555-4555-8555-555555555555'],
+      [
+        'apagado',
+        () => {
+          const role = seedCustomRole('Antigo', []);
+          role.softDelete(START);
+          roles.seed(role);
+          return role.id;
+        },
+      ],
+      [
+        'de outra organização',
+        () => seedCustomRole('Financeiro', [], createOrganization('beta')).id,
+      ],
+    ])('papel %s: ROLE_NOT_FOUND e nada é gravado', async (_, roleId) => {
+      await expect(
+        inviteAs(OWNER, { roleId: roleId() }),
+      ).rejects.toBeInstanceOf(RoleNotFoundError);
+      expect(invitations.items).toHaveLength(0);
+    });
+
+    it('sem members:invite, FORBIDDEN vem antes de olhar o papel', async () => {
+      await expect(
+        inviteAs(MEMBER, { roleId: '55555555-5555-4555-8555-555555555555' }),
+      ).rejects.toBeInstanceOf(OrganizationPermissionDeniedError);
+    });
+
+    it('quem convida precisa ter todas as permissões do papel do convite', async () => {
+      roles.grant(roleIdOf(RoleSystemKey.MEMBER), MEMBERS_INVITE);
+      const remover = seedCustomRole('Removedor', [
+        MEMBERS_READ,
+        MEMBERS_REMOVE,
+      ]);
+      const reader = seedCustomRole('Leitor', [MEMBERS_READ]);
+
+      for (const roleId of [remover.id, roleIdOf(RoleSystemKey.OWNER)]) {
+        await expect(inviteAs(MEMBER, { roleId })).rejects.toBeInstanceOf(
+          PrivilegeEscalationError,
+        );
+      }
+      expect(invitations.items).toHaveLength(0);
+
+      const { invitation } = await inviteAs(MEMBER, { roleId: reader.id });
+      expect(invitation.roleId).toBe(reader.id);
+    });
+
+    it('regra mais estreita que a da 8a: só members:invite não basta para convidar como MEMBER', async () => {
+      const recruiter = seedCustomRole('Recrutador', [MEMBERS_INVITE]);
+      giveMemberRole(recruiter);
+
+      await expect(
+        inviteAs(MEMBER, { role: RoleSystemKey.MEMBER }),
+      ).rejects.toBeInstanceOf(PrivilegeEscalationError);
+
+      const { invitation } = await inviteAs(MEMBER, { roleId: recruiter.id });
+      expect(invitation.roleId).toBe(recruiter.id);
     });
   });
 
@@ -812,6 +958,45 @@ describe('Convites', () => {
       expect((await invitations.findById(invitation.id))?.status).toBe(
         InvitationStatus.ACCEPTED,
       );
+    });
+
+    it('aceita convite com papel customizado', async () => {
+      const finance = seedCustomRole('Financeiro', [
+        OrganizationPermission.MEMBERS_READ,
+      ]);
+      const { invitation } = await inviteMember.execute({
+        cognitoSub: OWNER.sub,
+        organizationId: acme.id,
+        email: INVITEE.email,
+        roleId: finance.id,
+      });
+
+      const result = await acceptInvitation.execute({
+        cognitoSub: INVITEE.sub,
+        invitationId: invitation.id,
+      });
+
+      expect(result.membership.roleId).toBe(finance.id);
+      expect(result.role.id).toBe(finance.id);
+    });
+
+    it('trava a organização e só então relê o convite: um reconvite que trocou o papel nesse meio-tempo vale', async () => {
+      const invitation = await invite(INVITEE.email, RoleSystemKey.MEMBER);
+      const lock = vi
+        .spyOn(organizations, 'lock')
+        // Escrita concorrente que termina enquanto o aceite espera a trava.
+        .mockImplementationOnce(async () => {
+          await invite(INVITEE.email, RoleSystemKey.OWNER);
+        });
+
+      const result = await acceptInvitation.execute({
+        cognitoSub: INVITEE.sub,
+        invitationId: invitation.id,
+      });
+
+      expect(lock).toHaveBeenCalledWith(acme.id);
+      expect(result.membership.roleId).toBe(roleIdOf(RoleSystemKey.OWNER));
+      expect(result.role.systemKey).toBe(RoleSystemKey.OWNER);
     });
 
     it('perfil inativo não aceita', async () => {

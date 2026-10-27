@@ -90,7 +90,13 @@ describe('Swagger (e2e)', () => {
       expect(spec.components.schemas.MembershipRole.enum).toEqual([
         'OWNER',
         'MEMBER',
+        'CUSTOM',
       ]);
+      expect(IntegrationMemberResponse.properties.roleId.format).toBe('uuid');
+      expect(IntegrationMemberResponse.properties.roleName.type).toBe('string');
+      expect(IntegrationMemberResponse.required).toEqual(
+        expect.arrayContaining(['role', 'roleId', 'roleName']),
+      );
       expect(ApiErrorBody.required).toEqual(['code', 'message']);
     });
 

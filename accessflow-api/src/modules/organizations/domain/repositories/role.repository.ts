@@ -20,6 +20,29 @@ export abstract class RoleRepository {
    */
   abstract findByIds(ids: string[]): Promise<Role[]>;
 
+  /**
+   * Papéis não apagados da organização, de sistema e customizados, sem
+   * ordem garantida. São poucos: no máximo os dois de sistema mais
+   * Role.MAX_CUSTOM_PER_ORGANIZATION.
+   */
+  abstract listActiveByOrganization(organizationId: string): Promise<Role[]>;
+
   /** Grava os papéis padrão de uma organização recém-criada, juntos. */
   abstract createDefaults(roles: DefaultRoles): Promise<void>;
+
+  /** Grava um papel novo com as permissões dele, juntos. */
+  abstract create(role: Role): Promise<void>;
+
+  /**
+   * Grava o que muda num papel existente: nome, permissões, `deletedAt` e
+   * `updatedAt`. As permissões gravadas passam a ser exatamente as do papel.
+   */
+  abstract save(role: Role): Promise<void>;
+
+  /**
+   * Se algum membership ACTIVE ou convite PENDING (expirado ou não) aponta
+   * para o papel. Lido de uma vez: um aceite, que troca o convite pelo
+   * membership numa transação, nunca escapa entre as duas contagens.
+   */
+  abstract isInUse(roleId: string): Promise<boolean>;
 }

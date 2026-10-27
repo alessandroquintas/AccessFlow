@@ -6,6 +6,7 @@ import {
 import { TransactionManager } from '@/shared/application/ports/transaction-manager.port';
 import { PrismaClientProvider } from '@/shared/infrastructure/database/prisma-client.provider';
 import { Membership } from '@/modules/organizations/domain/entities/membership.entity';
+import { Role } from '@/modules/organizations/domain/entities/role.entity';
 import { LastOwnerError } from '@/modules/organizations/domain/errors/last-owner.error';
 import {
   MembershipCursor,
@@ -83,6 +84,41 @@ export class PrismaMembershipRepository extends MembershipRepository {
     });
   }
 
+  async countActiveByRole(
+    organizationId: string,
+  ): Promise<Map<string, number>> {
+    const groups = await this.clients.current().membership.groupBy({
+      by: ['roleId'],
+      where: { organizationId, status: PrismaMembershipStatus.ACTIVE },
+      _count: { _all: true },
+    });
+    return new Map(groups.map((group) => [group.roleId, group._count._all]));
+  }
+
+  async changeRole(
+    membership: Membership,
+    role: Role,
+    now: Date,
+  ): Promise<void> {
+    await this.transactions.run(async () => {
+      const tx = this.clients.current();
+      // Trava a organização, como o remove: trocas e remoções concorrentes
+      // nela esperam aqui e só contam os OWNERs depois da anterior.
+      await tx.$queryRaw`SELECT id FROM organizations WHERE id = ${membership.organizationId}::uuid FOR UPDATE`;
+
+      if (!role.isOwner()) await this.ensureNotLastOwner(membership);
+
+      membership.changeRole(role.id, now);
+      const { roleId, updatedAt } =
+        PrismaMembershipMapper.toPersistence(membership);
+
+      await tx.membership.update({
+        where: { id: membership.id },
+        data: { roleId, updatedAt },
+      });
+    });
+  }
+
   async remove(membership: Membership, now: Date): Promise<void> {
     await this.transactions.run(async () => {
       const tx = this.clients.current();
@@ -90,23 +126,7 @@ export class PrismaMembershipRepository extends MembershipRepository {
       // contam os OWNERs depois que a anterior terminar.
       await tx.$queryRaw`SELECT id FROM organizations WHERE id = ${membership.organizationId}::uuid FOR UPDATE`;
 
-      // OWNER é o membership ativo cujo papel tem systemKey OWNER.
-      const owner = {
-        organizationId: membership.organizationId,
-        status: PrismaMembershipStatus.ACTIVE,
-        role: { systemKey: PrismaRoleSystemKey.OWNER },
-      };
-      const isOwner =
-        membership.isActive() &&
-        (await tx.membership.count({
-          where: { ...owner, id: membership.id },
-        })) > 0;
-      if (isOwner) {
-        const otherOwners = await tx.membership.count({
-          where: { ...owner, id: { not: membership.id } },
-        });
-        if (otherOwners === 0) throw new LastOwnerError();
-      }
+      await this.ensureNotLastOwner(membership);
 
       membership.remove(now);
       const { status, updatedAt } =
@@ -117,5 +137,30 @@ export class PrismaMembershipRepository extends MembershipRepository {
         data: { status, updatedAt },
       });
     });
+  }
+
+  /**
+   * LastOwnerError se o membership for o último OWNER ativo da organização.
+   * Lê o papel no banco, e não na entidade: chamar com a organização travada.
+   */
+  private async ensureNotLastOwner(membership: Membership): Promise<void> {
+    const tx = this.clients.current();
+    // OWNER é o membership ativo cujo papel tem systemKey OWNER.
+    const owner = {
+      organizationId: membership.organizationId,
+      status: PrismaMembershipStatus.ACTIVE,
+      role: { systemKey: PrismaRoleSystemKey.OWNER },
+    };
+    const isOwner =
+      membership.isActive() &&
+      (await tx.membership.count({
+        where: { ...owner, id: membership.id },
+      })) > 0;
+    if (!isOwner) return;
+
+    const otherOwners = await tx.membership.count({
+      where: { ...owner, id: { not: membership.id } },
+    });
+    if (otherOwners === 0) throw new LastOwnerError();
   }
 }

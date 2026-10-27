@@ -1,4 +1,5 @@
 import { Membership } from '@/modules/organizations/domain/entities/membership.entity';
+import { Role } from '@/modules/organizations/domain/entities/role.entity';
 import { LastOwnerError } from '@/modules/organizations/domain/errors/last-owner.error';
 import {
   MembershipCursor,
@@ -60,18 +61,50 @@ export class InMemoryMembershipRepository extends MembershipRepository {
     this.items.push(membership);
   }
 
-  async remove(membership: Membership, now: Date): Promise<void> {
-    if (this.isActiveOwner(membership)) {
-      const otherOwners = this.items.filter(
-        (m) =>
-          m.organizationId === membership.organizationId &&
-          m.id !== membership.id &&
-          this.isActiveOwner(m),
-      );
-      if (otherOwners.length === 0) throw new LastOwnerError();
+  async countActiveByRole(
+    organizationId: string,
+  ): Promise<Map<string, number>> {
+    const counts = new Map<string, number>();
+    for (const m of this.items) {
+      if (m.organizationId !== organizationId || !m.isActive()) continue;
+      counts.set(m.roleId, (counts.get(m.roleId) ?? 0) + 1);
     }
+    return counts;
+  }
+
+  async changeRole(
+    membership: Membership,
+    role: Role,
+    now: Date,
+  ): Promise<void> {
+    if (!role.isOwner()) this.ensureNotLastOwner(membership);
+
+    membership.changeRole(role.id, now);
+    this.replace(membership);
+  }
+
+  async remove(membership: Membership, now: Date): Promise<void> {
+    this.ensureNotLastOwner(membership);
 
     membership.remove(now);
+    this.replace(membership);
+  }
+
+  /** Mesma regra do Prisma, com o papel gravado (e não o da entidade). */
+  private ensureNotLastOwner(membership: Membership): void {
+    const stored = this.items.find((m) => m.id === membership.id);
+    if (!stored || !this.isActiveOwner(stored)) return;
+
+    const otherOwners = this.items.filter(
+      (m) =>
+        m.organizationId === membership.organizationId &&
+        m.id !== membership.id &&
+        this.isActiveOwner(m),
+    );
+    if (otherOwners.length === 0) throw new LastOwnerError();
+  }
+
+  private replace(membership: Membership): void {
     const index = this.items.findIndex((m) => m.id === membership.id);
     if (index >= 0) {
       this.items[index] = membership;

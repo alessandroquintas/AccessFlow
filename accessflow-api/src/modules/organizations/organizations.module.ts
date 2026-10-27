@@ -38,6 +38,14 @@ import { InvitationsResolver } from './presentation/graphql/resolvers/invitation
 import { RoleRepository } from './domain/repositories/role.repository';
 import { PrismaRoleRepository } from './infrastructure/persistence/prisma-role.repository';
 import { TransactionManager } from '@/shared/application/ports/transaction-manager.port';
+import { ListOrganizationRolesUseCase } from './application/use-cases/list-organization-roles.use-case';
+import { GetMyPermissionsUseCase } from './application/use-cases/get-my-permissions.use-case';
+import { CreateRoleUseCase } from './application/use-cases/create-role.use-case';
+import { UpdateRoleUseCase } from './application/use-cases/update-role.use-case';
+import { DeleteRoleUseCase } from './application/use-cases/delete-role.use-case';
+import { AssignRoleUseCase } from './application/use-cases/assign-role.use-case';
+import { CountMembersByRoleUseCase } from './application/use-cases/count-members-by-role.use-case';
+import { RolesResolver } from './presentation/graphql/resolvers/roles.resolver';
 
 @Module({
   imports: [PrismaModule, IdentityModule, ClockModule],
@@ -211,17 +219,29 @@ import { TransactionManager } from '@/shared/application/ports/transaction-manag
     {
       provide: LeaveOrganizationUseCase,
       inject: [
+        OrganizationRepository,
         MembershipRepository,
         UserDirectoryPort,
         OrganizationAccessService,
+        TransactionManager,
         ClockPort,
       ],
       useFactory: (
+        organizations: OrganizationRepository,
         memberships: MembershipRepository,
         users: UserDirectoryPort,
         access: OrganizationAccessService,
+        transactions: TransactionManager,
         clock: ClockPort,
-      ) => new LeaveOrganizationUseCase(memberships, users, access, clock),
+      ) =>
+        new LeaveOrganizationUseCase(
+          organizations,
+          memberships,
+          users,
+          access,
+          transactions,
+          clock,
+        ),
     },
     {
       provide: CheckMembershipForIntegrationUseCase,
@@ -360,6 +380,7 @@ import { TransactionManager } from '@/shared/application/ports/transaction-manag
         OrganizationRepository,
         RoleRepository,
         UserDirectoryPort,
+        TransactionManager,
         ClockPort,
       ],
       useFactory: (
@@ -367,6 +388,7 @@ import { TransactionManager } from '@/shared/application/ports/transaction-manag
         organizations: OrganizationRepository,
         roles: RoleRepository,
         users: UserDirectoryPort,
+        transactions: TransactionManager,
         clock: ClockPort,
       ) =>
         new AcceptInvitationUseCase(
@@ -374,6 +396,7 @@ import { TransactionManager } from '@/shared/application/ports/transaction-manag
           organizations,
           roles,
           users,
+          transactions,
           clock,
         ),
     },
@@ -386,11 +409,155 @@ import { TransactionManager } from '@/shared/application/ports/transaction-manag
         clock: ClockPort,
       ) => new DeclineInvitationUseCase(invitations, users, clock),
     },
+    {
+      provide: ListOrganizationRolesUseCase,
+      inject: [
+        RoleRepository,
+        MembershipRepository,
+        UserDirectoryPort,
+        OrganizationAccessService,
+      ],
+      useFactory: (
+        roles: RoleRepository,
+        memberships: MembershipRepository,
+        users: UserDirectoryPort,
+        access: OrganizationAccessService,
+      ) => new ListOrganizationRolesUseCase(roles, memberships, users, access),
+    },
+    {
+      provide: GetMyPermissionsUseCase,
+      inject: [UserDirectoryPort, OrganizationAccessService],
+      useFactory: (
+        users: UserDirectoryPort,
+        access: OrganizationAccessService,
+      ) => new GetMyPermissionsUseCase(users, access),
+    },
+    {
+      provide: CreateRoleUseCase,
+      inject: [
+        OrganizationRepository,
+        RoleRepository,
+        UserDirectoryPort,
+        OrganizationAccessService,
+        TransactionManager,
+        ClockPort,
+      ],
+      useFactory: (
+        organizations: OrganizationRepository,
+        roles: RoleRepository,
+        users: UserDirectoryPort,
+        access: OrganizationAccessService,
+        transactions: TransactionManager,
+        clock: ClockPort,
+      ) =>
+        new CreateRoleUseCase(
+          organizations,
+          roles,
+          users,
+          access,
+          transactions,
+          clock,
+        ),
+    },
+    {
+      provide: UpdateRoleUseCase,
+      inject: [
+        OrganizationRepository,
+        RoleRepository,
+        MembershipRepository,
+        UserDirectoryPort,
+        OrganizationAccessService,
+        TransactionManager,
+        ClockPort,
+      ],
+      useFactory: (
+        organizations: OrganizationRepository,
+        roles: RoleRepository,
+        memberships: MembershipRepository,
+        users: UserDirectoryPort,
+        access: OrganizationAccessService,
+        transactions: TransactionManager,
+        clock: ClockPort,
+      ) =>
+        new UpdateRoleUseCase(
+          organizations,
+          roles,
+          memberships,
+          users,
+          access,
+          transactions,
+          clock,
+        ),
+    },
+    {
+      provide: DeleteRoleUseCase,
+      inject: [
+        OrganizationRepository,
+        RoleRepository,
+        UserDirectoryPort,
+        OrganizationAccessService,
+        TransactionManager,
+        ClockPort,
+      ],
+      useFactory: (
+        organizations: OrganizationRepository,
+        roles: RoleRepository,
+        users: UserDirectoryPort,
+        access: OrganizationAccessService,
+        transactions: TransactionManager,
+        clock: ClockPort,
+      ) =>
+        new DeleteRoleUseCase(
+          organizations,
+          roles,
+          users,
+          access,
+          transactions,
+          clock,
+        ),
+    },
+    {
+      provide: AssignRoleUseCase,
+      inject: [
+        OrganizationRepository,
+        MembershipRepository,
+        RoleRepository,
+        UserDirectoryPort,
+        OrganizationAccessService,
+        TransactionManager,
+        ClockPort,
+      ],
+      useFactory: (
+        organizations: OrganizationRepository,
+        memberships: MembershipRepository,
+        roles: RoleRepository,
+        users: UserDirectoryPort,
+        access: OrganizationAccessService,
+        transactions: TransactionManager,
+        clock: ClockPort,
+      ) =>
+        new AssignRoleUseCase(
+          organizations,
+          memberships,
+          roles,
+          users,
+          access,
+          transactions,
+          clock,
+        ),
+    },
+    {
+      provide: CountMembersByRoleUseCase,
+      inject: [MembershipRepository],
+      useFactory: (memberships: MembershipRepository) =>
+        new CountMembersByRoleUseCase(memberships),
+    },
 
     // Apresentação
     OrganizationsResolver,
     MembersResolver,
     InvitationsResolver,
+    RolesResolver,
   ],
 })
 export class OrganizationsModule {}

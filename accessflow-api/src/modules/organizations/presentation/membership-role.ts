@@ -4,12 +4,13 @@ import {
 } from '@/modules/organizations/domain/entities/role.entity';
 
 /**
- * Papel como a API pública o expõe (GraphQL e REST). Nesta fase todo papel
- * é de sistema, então o valor sai do systemKey.
+ * Papel como a API pública o expõe (GraphQL e REST): o systemKey, ou CUSTOM
+ * para papel personalizado. O papel completo vem em `assignedRole`.
  */
 export const MembershipRole = {
   OWNER: 'OWNER',
   MEMBER: 'MEMBER',
+  CUSTOM: 'CUSTOM',
 } as const;
 
 export type MembershipRole =
@@ -20,19 +21,19 @@ const BY_SYSTEM_KEY: Record<RoleSystemKey, MembershipRole> = {
   MEMBER: MembershipRole.MEMBER,
 };
 
-const SYSTEM_KEY_BY_ROLE: Record<MembershipRole, RoleSystemKey> = {
+const SYSTEM_KEY_BY_ROLE: Record<MembershipRole, RoleSystemKey | null> = {
   OWNER: RoleSystemKey.OWNER,
   MEMBER: RoleSystemKey.MEMBER,
+  CUSTOM: null,
 };
 
 export function membershipRoleOf(role: Role): MembershipRole {
-  if (role.systemKey === null) {
-    // Papéis customizados ganham representação na API na Fase 8b.
-    throw new Error(`Papel sem systemKey não tem MembershipRole: ${role.id}`);
-  }
-  return BY_SYSTEM_KEY[role.systemKey];
+  return role.systemKey === null
+    ? MembershipRole.CUSTOM
+    : BY_SYSTEM_KEY[role.systemKey];
 }
 
-export function systemKeyOf(role: MembershipRole): RoleSystemKey {
+/** CUSTOM não identifica um papel: devolve null. */
+export function systemKeyOf(role: MembershipRole): RoleSystemKey | null {
   return SYSTEM_KEY_BY_ROLE[role];
 }

@@ -1,4 +1,4 @@
-import { beforeEach, describe, expect, it } from 'vitest';
+import { beforeEach, describe, expect, it, vi } from 'vitest';
 import { Organization } from '@/modules/organizations/domain/entities/organization.entity';
 import {
   Membership,
@@ -101,9 +101,11 @@ describe('Membros da organização', () => {
       clock,
     );
     leaveOrganization = new LeaveOrganizationUseCase(
+      organizations,
       memberships,
       users,
       access,
+      new FakeTransactionManager(),
       clock,
     );
 
@@ -286,6 +288,28 @@ describe('Membros da organização', () => {
   });
 
   describe('LeaveOrganizationUseCase', () => {
+    it('trava a organização antes de ler o membership', async () => {
+      const calls: string[] = [];
+      vi.spyOn(organizations, 'lock').mockImplementation(async () => {
+        calls.push('lock');
+      });
+      const find = memberships.findByOrganizationAndUser.bind(memberships);
+      vi.spyOn(memberships, 'findByOrganizationAndUser').mockImplementation(
+        (...args) => {
+          calls.push('membership');
+          return find(...args);
+        },
+      );
+
+      await leaveOrganization.execute({
+        cognitoSub: MEMBER.sub,
+        organizationId: organization.id,
+      });
+
+      expect(calls[0]).toBe('lock');
+      expect(calls).toContain('membership');
+    });
+
     it('MEMBER sai e depois recebe NOT_FOUND', async () => {
       await leaveOrganization.execute({
         cognitoSub: MEMBER.sub,

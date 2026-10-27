@@ -8,6 +8,8 @@ import { PrismaRoleMapper } from '@/modules/organizations/infrastructure/persist
 export interface SeedMembershipInput {
   userId: string;
   role?: RoleSystemKey;
+  /** Papel por id (ex.: customizado); tem precedência sobre `role`. */
+  roleId?: string;
   status?: 'ACTIVE' | 'REMOVED';
   createdAt?: Date;
 }
@@ -79,13 +81,17 @@ export async function systemRoleId(
   return role.id;
 }
 
-/** Membership com o papel de sistema da própria organização (MEMBER por padrão). */
+/**
+ * Membership com `roleId` ou com o papel de sistema da própria organização
+ * (MEMBER por padrão).
+ */
 export async function seedMembership(
   prisma: PrismaClient,
   {
     organizationId,
     userId,
     role = RoleSystemKey.MEMBER,
+    roleId,
     status,
     createdAt,
   }: SeedMembershipInput & { organizationId: string },
@@ -94,9 +100,34 @@ export async function seedMembership(
     data: {
       organizationId,
       userId,
-      roleId: await systemRoleId(prisma, organizationId, role),
+      roleId: roleId ?? (await systemRoleId(prisma, organizationId, role)),
       status,
       createdAt,
     },
   });
+}
+
+/** Papel customizado gravado direto no banco; devolve o id. */
+export async function seedRole(
+  prisma: PrismaClient,
+  input: {
+    organizationId: string;
+    name: string;
+    permissions?: string[];
+    deletedAt?: Date;
+  },
+): Promise<string> {
+  const role = await prisma.role.create({
+    data: {
+      organizationId: input.organizationId,
+      name: input.name,
+      deletedAt: input.deletedAt,
+      permissions: {
+        create: (input.permissions ?? []).map((permissionKey) => ({
+          permissionKey,
+        })),
+      },
+    },
+  });
+  return role.id;
 }

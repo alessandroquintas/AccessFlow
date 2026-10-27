@@ -1,6 +1,7 @@
 import { MyInvitation } from '@/modules/organizations/application/dto/my-invitation';
 import { MembershipRole, membershipRoleOf } from '../../membership-role';
 import { Field, ID, ObjectType } from '@nestjs/graphql';
+import { OrganizationRoleType } from './organization-role.type';
 
 /** Só o que o convidado precisa para decidir: ele ainda não é membro. */
 @ObjectType('InvitationOrganization')
@@ -20,8 +21,16 @@ export class MyInvitationType {
   @Field(() => ID)
   id!: string;
 
-  @Field(() => MembershipRole, { description: 'Papel ao aceitar o convite.' })
+  @Field(() => MembershipRole, {
+    description: 'Papel ao aceitar o convite.',
+    deprecationReason: 'Use assignedRole.',
+  })
   role!: MembershipRole;
+
+  @Field(() => OrganizationRoleType, {
+    description: 'Papel ao aceitar o convite.',
+  })
+  assignedRole!: OrganizationRoleType;
 
   @Field()
   expiresAt!: Date;
@@ -41,6 +50,7 @@ export class MyInvitationType {
     const type = new MyInvitationType();
     type.id = invitation.id;
     type.role = membershipRoleOf(role);
+    type.assignedRole = OrganizationRoleType.from(role);
     type.expiresAt = invitation.expiresAt;
     type.organization = {
       id: organization.id,

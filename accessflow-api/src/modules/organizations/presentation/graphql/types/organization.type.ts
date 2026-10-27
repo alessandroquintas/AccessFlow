@@ -2,9 +2,18 @@ import { OrganizationWithMembership } from '@/modules/organizations/application/
 import { MembershipRole, membershipRoleOf } from '../../membership-role';
 import { OrganizationStatus } from '@/modules/organizations/domain/entities/organization.entity';
 import { Field, ID, ObjectType, registerEnumType } from '@nestjs/graphql';
+import { OrganizationRoleType } from './organization-role.type';
 
 registerEnumType(OrganizationStatus, { name: 'OrganizationStatus' });
-registerEnumType(MembershipRole, { name: 'MembershipRole' });
+registerEnumType(MembershipRole, {
+  name: 'MembershipRole',
+  valuesMap: {
+    CUSTOM: {
+      description:
+        'Papel personalizado: o detalhe vem no campo do papel atribuído.',
+    },
+  },
+});
 
 @ObjectType('Organization')
 export class OrganizationType {
@@ -25,8 +34,14 @@ export class OrganizationType {
 
   @Field(() => MembershipRole, {
     description: 'Papel do usuário autenticado nesta organização.',
+    deprecationReason: 'Use viewerAssignedRole.',
   })
   viewerRole!: MembershipRole;
+
+  @Field(() => OrganizationRoleType, {
+    description: 'Papel do usuário autenticado nesta organização.',
+  })
+  viewerAssignedRole!: OrganizationRoleType;
 
   static from({
     organization,
@@ -39,6 +54,7 @@ export class OrganizationType {
     type.status = organization.status;
     type.createdAt = organization.createdAt;
     type.viewerRole = membershipRoleOf(role);
+    type.viewerAssignedRole = OrganizationRoleType.from(role);
     return type;
   }
 }

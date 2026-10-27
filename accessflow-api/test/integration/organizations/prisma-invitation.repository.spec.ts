@@ -643,6 +643,7 @@ describe('PrismaInvitationRepository (integração)', () => {
         organizations,
         new PrismaRoleRepository(clients, transactions),
         users,
+        transactions,
         new FixedClock(at(DAY)),
       );
 

@@ -142,4 +142,45 @@ describe('Membership', () => {
       expect(membership.roleId).toBe(member.id);
     });
   });
+
+  describe('changeRole', () => {
+    const joinedAt = new Date('2026-01-01T00:00:00Z');
+    const now = new Date('2026-01-03T00:00:00Z');
+    const join = () =>
+      Membership.create(
+        { organizationId: 'org-1', userId: 'user-1', roleId: member.id },
+        joinedAt,
+      );
+
+    it('troca o papel de um membership ativo', () => {
+      const membership = join();
+
+      membership.changeRole(owner.id, now);
+
+      expect(membership.roleId).toBe(owner.id);
+      expect(membership.updatedAt).toEqual(now);
+      expect(membership.isActive()).toBe(true);
+    });
+
+    it('o mesmo papel não muda nada', () => {
+      const membership = join();
+
+      membership.changeRole(member.id, now);
+
+      expect(membership.roleId).toBe(member.id);
+      expect(membership.updatedAt).toEqual(joinedAt);
+    });
+
+    it('recusa membership removido e papel vazio', () => {
+      const removed = join();
+      removed.remove(now);
+      const active = join();
+
+      expect(() => removed.changeRole(owner.id, now)).toThrow(
+        InvalidMembershipError,
+      );
+      expect(() => active.changeRole(' ', now)).toThrow(InvalidMembershipError);
+      expect([removed.roleId, active.roleId]).toEqual([member.id, member.id]);
+    });
+  });
 });

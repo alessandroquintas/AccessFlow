@@ -13,7 +13,8 @@ import { ClockPort } from '@/shared/application/ports/clock.port';
 import { decodeCursor } from '@/shared/presentation/graphql/pagination/cursor';
 import { clampPageSize } from '@/shared/presentation/graphql/pagination/page-size';
 import { InviteMemberInput } from '../inputs/invite-member.input';
-import { systemKeyOf } from '../../membership-role';
+import { MembershipRole, systemKeyOf } from '../../membership-role';
+import { InvalidInvitationError } from '@/modules/organizations/domain/errors/invalid-invitation.error';
 import { OrganizationInvitationType } from '../types/organization-invitation.type';
 import { OrganizationInvitationConnectionType } from '../types/organization-invitation-connection.type';
 import { MyInvitationType } from '../types/my-invitation.type';
@@ -42,11 +43,20 @@ export class InvitationsResolver {
     @Args('organizationId', { type: () => ID }) organizationId: string,
     @Args('input') input: InviteMemberInput,
   ): Promise<OrganizationInvitationType> {
+    // Validado antes do acesso, como o cursor nas listagens: a resposta não
+    // depende da organização.
+    if (input.role === MembershipRole.CUSTOM) {
+      throw new InvalidInvitationError(
+        'CUSTOM não identifica um papel: use roleId.',
+      );
+    }
+
     const result = await this.inviteMemberUseCase.execute({
       cognitoSub: identity.sub,
       organizationId,
       email: input.email,
-      role: systemKeyOf(input.role),
+      role: input.role ? systemKeyOf(input.role) : undefined,
+      roleId: input.roleId ?? undefined,
     });
 
     return OrganizationInvitationType.from(result, this.clock.now());

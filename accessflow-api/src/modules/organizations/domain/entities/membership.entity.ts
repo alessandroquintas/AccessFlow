@@ -94,6 +94,23 @@ export class Membership {
     };
   }
 
+  /** Troca o papel de um membership ativo. O mesmo papel não muda nada. */
+  changeRole(roleId: string, now: Date): void {
+    if (!this.isActive()) {
+      throw new InvalidMembershipError(
+        'Só um membership ativo pode trocar de papel.',
+      );
+    }
+
+    if (!roleId?.trim()) {
+      throw new InvalidMembershipError('roleId é obrigatório.');
+    }
+
+    if (roleId === this.props.roleId) return;
+
+    this.props = { ...this.props, roleId, updatedAt: now };
+  }
+
   /** Volta um membership REMOVED para ACTIVE com o papel informado. */
   reactivate(roleId: string, now: Date): void {
     if (this.isActive()) {

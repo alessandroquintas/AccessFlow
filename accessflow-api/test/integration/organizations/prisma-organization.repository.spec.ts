@@ -5,6 +5,7 @@ import { PrismaTransactionManager } from '@/shared/infrastructure/database/prism
 import { Organization } from '@/modules/organizations/domain/entities/organization.entity';
 import { Membership } from '@/modules/organizations/domain/entities/membership.entity';
 import { RoleSystemKey } from '@/modules/organizations/domain/entities/role.entity';
+import { MembershipStatus } from '@/modules/organizations/domain/entities/membership.entity';
 import { SlugAlreadyTakenError } from '@/modules/organizations/domain/errors/slug-already-taken.error';
 import { LastOwnerError } from '@/modules/organizations/domain/errors/last-owner.error';
 import { CreateOrganizationUseCase } from '@/modules/organizations/application/use-cases/create-organization.use-case';
@@ -14,7 +15,10 @@ import { PrismaMembershipRepository } from '@/modules/organizations/infrastructu
 import { PrismaRoleRepository } from '@/modules/organizations/infrastructure/persistence/prisma-role.repository';
 import { FakeUserDirectory } from '@test/fakes/organizations/fake-user-directory';
 import { FixedClock } from '@test/fakes/shared/fixed-clock';
-import { seedOrganization } from '@test/factory/organizations/seed-organization';
+import {
+  seedOrganization,
+  seedRole,
+} from '@test/factory/organizations/seed-organization';
 
 let prisma: PrismaService;
 let organizations: PrismaOrganizationRepository;
@@ -341,6 +345,113 @@ describe('Repositórios de organizations (integração)', () => {
           },
         }),
       ).toBe(1);
+    });
+  });
+
+  describe('countActiveByRole e changeRole', () => {
+    const LATER = new Date('2026-03-02T12:00:00.000Z');
+
+    async function roleOf(userId: string, organizationId: string) {
+      const record = await prisma.membership.findFirstOrThrow({
+        where: { userId, organizationId },
+      });
+      return { roleId: record.roleId, updatedAt: record.updatedAt };
+    }
+
+    it('countActiveByRole conta só os ativos, por papel, só da organização', async () => {
+      const [ana, bruno, carla, davi] = await Promise.all(
+        ['sub-ana', 'sub-bruno', 'sub-carla', 'sub-davi'].map(createUser),
+      );
+      const acme = await createOrganizationWithOwner('acme', ana.id);
+      const beta = await createOrganizationWithOwner('beta', ana.id);
+      const finance = await seedRole(prisma, {
+        organizationId: acme.id,
+        name: 'Financeiro',
+      });
+      await addMembership(acme.id, bruno.id, finance);
+      await addMembership(acme.id, carla.id, finance);
+      const removed = await addMembership(
+        acme.id,
+        davi.id,
+        acme.roleIds.MEMBER,
+      );
+      await memberships.remove(removed, new Date());
+      await addMembership(beta.id, bruno.id, beta.roleIds.MEMBER);
+
+      const counts = await memberships.countActiveByRole(acme.id);
+
+      expect(Object.fromEntries(counts)).toEqual({
+        [acme.roleIds.OWNER]: 1,
+        [finance]: 2,
+      });
+    });
+
+    it('troca o papel e grava updatedAt', async () => {
+      const ana = await createUser('sub-ana');
+      const bruno = await createUser('sub-bruno');
+      const acme = await createOrganizationWithOwner('acme', ana.id);
+      await addMembership(acme.id, bruno.id, acme.roleIds.MEMBER);
+      const member = await memberships.findByOrganizationAndUser(
+        acme.id,
+        bruno.id,
+      );
+      const owner = await roles.findById(acme.id, acme.roleIds.OWNER);
+
+      await memberships.changeRole(member!, owner!, LATER);
+
+      expect(await roleOf(bruno.id, acme.id)).toEqual({
+        roleId: acme.roleIds.OWNER,
+        updatedAt: LATER,
+      });
+    });
+
+    it('recusa rebaixar o último OWNER e nada muda', async () => {
+      const ana = await createUser('sub-ana');
+      const acme = await createOrganizationWithOwner('acme', ana.id);
+      const owner = await memberships.findByOrganizationAndUser(
+        acme.id,
+        ana.id,
+      );
+      const member = await roles.findById(acme.id, acme.roleIds.MEMBER);
+      const before = await roleOf(ana.id, acme.id);
+
+      await expect(
+        memberships.changeRole(owner!, member!, LATER),
+      ).rejects.toBeInstanceOf(LastOwnerError);
+      expect(await roleOf(ana.id, acme.id)).toEqual(before);
+    });
+
+    it('decide pelo papel gravado no banco, e não pelo da entidade', async () => {
+      const ana = await createUser('sub-ana');
+      const acme = await createOrganizationWithOwner('acme', ana.id);
+      const loaded = await memberships.findByOrganizationAndUser(
+        acme.id,
+        ana.id,
+      );
+      // Entidade desatualizada: acha que a Ana é MEMBER, mas no banco ela é
+      // o único OWNER.
+      const stale = Membership.restore({
+        id: loaded!.id,
+        organizationId: acme.id,
+        userId: ana.id,
+        roleId: acme.roleIds.MEMBER,
+        status: MembershipStatus.ACTIVE,
+        createdAt: loaded!.createdAt,
+        updatedAt: loaded!.updatedAt,
+      });
+      const finance = await seedRole(prisma, {
+        organizationId: acme.id,
+        name: 'Financeiro',
+      });
+
+      await expect(
+        memberships.changeRole(
+          stale,
+          (await roles.findById(acme.id, finance))!,
+          LATER,
+        ),
+      ).rejects.toBeInstanceOf(LastOwnerError);
+      expect((await roleOf(ana.id, acme.id)).roleId).toBe(acme.roleIds.OWNER);
     });
   });
 });

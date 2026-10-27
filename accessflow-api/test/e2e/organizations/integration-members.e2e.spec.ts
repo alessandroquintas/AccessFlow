@@ -9,6 +9,7 @@ import { createTestApp } from '@test/e2e/setup/create-test-e2e-app';
 import {
   seedMembership,
   seedOrganization,
+  seedRole,
 } from '@test/factory/organizations/seed-organization';
 
 let app: INestApplication;
@@ -104,7 +105,29 @@ describe('GET /v1/organizations/:organizationId/members/:userId (e2e)', () => {
       organizationId: acmeId,
       userId: users.bruno,
       role: 'MEMBER',
+      roleId: membership.roleId,
+      roleName: 'Member',
       joinedAt: membership.createdAt.toISOString(),
+    });
+  });
+
+  it('papel personalizado: role CUSTOM, com roleId e roleName', async () => {
+    const roleId = await seedRole(prisma, {
+      organizationId: acmeId,
+      name: 'Financeiro',
+    });
+    await prisma.membership.updateMany({
+      where: { organizationId: acmeId, userId: users.bruno },
+      data: { roleId },
+    });
+
+    const res = await getMember(acmeId, users.bruno, 'token-acme');
+
+    expect(res.status).toBe(200);
+    expect(res.body).toMatchObject({
+      role: 'CUSTOM',
+      roleId,
+      roleName: 'Financeiro',
     });
   });
 

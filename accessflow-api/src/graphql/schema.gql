@@ -2,12 +2,31 @@
 # THIS FILE WAS AUTOMATICALLY GENERATED (DO NOT MODIFY)
 # ------------------------------------------------------
 
+input AssignRoleInput {
+  roleId: ID!
+
+  """Membro ativo que recebe o papel."""
+  userId: ID!
+}
+
 input CreateOrganizationInput {
   """Nome de exibição (2 a 100 caracteres)."""
   name: String!
 
   """Identificador para URLs: letras minúsculas, números e hífens (3 a 50)."""
   slug: String!
+}
+
+input CreateRoleInput {
+  """
+  Nome (1 a 50 caracteres), único na organização sem diferenciar maiúsculas e minúsculas.
+  """
+  name: String!
+
+  """
+  Chaves do permissionCatalog; repetidas são ignoradas. Só é possível conceder permissões que você tem.
+  """
+  permissions: [String!]!
 }
 
 """
@@ -40,10 +59,17 @@ input InviteMemberInput {
   email: String!
 
   """Papel ao aceitar. Convidar como OWNER exige ser OWNER."""
-  role: MembershipRole!
+  role: MembershipRole
+
+  """
+  Qualquer papel da organização, inclusive personalizado. Informe role ou roleId, só um deles. Exige ter todas as permissões do papel.
+  """
+  roleId: ID
 }
 
 enum MembershipRole {
+  """Papel personalizado: o detalhe vem no campo do papel atribuído."""
+  CUSTOM
   MEMBER
   OWNER
 }
@@ -54,11 +80,24 @@ type Mutation {
   """
   acceptInvitation(invitationId: ID!): Organization!
 
+  """
+  Troca o papel de um membro. Só é possível atribuir e tirar papéis cujas permissões você tem. Exige roles:assign.
+  """
+  assignRole(input: AssignRoleInput!, organizationId: ID!): OrganizationMember!
+
   """Cria uma organização. O usuário autenticado se torna OWNER."""
   createOrganization(input: CreateOrganizationInput!): Organization!
 
+  """Cria um papel personalizado. Exige roles:manage."""
+  createRole(input: CreateRoleInput!, organizationId: ID!): OrganizationRole!
+
   """Recusa um convite para o e-mail do usuário autenticado."""
   declineInvitation(invitationId: ID!): Boolean!
+
+  """
+  Apaga um papel personalizado sem membros ativos nem convites pendentes. Exige roles:manage.
+  """
+  deleteRole(organizationId: ID!, roleId: ID!): Boolean!
 
   """
   Convida um e-mail para a organização. Convidar de novo o mesmo e-mail renova o convite pendente. Exige members:invite.
@@ -86,9 +125,16 @@ type Mutation {
 
   """Atualiza os dados da organização. """
   updateOrganization(input: UpdateOrganizationInput!, organizationId: ID!): Organization!
+
+  """
+  Renomeia um papel ou troca as permissões dele. O OWNER não muda; o MEMBER só muda as permissões. Exige roles:manage.
+  """
+  updateRole(input: UpdateRoleInput!, organizationId: ID!): OrganizationRole!
 }
 
 type MyInvitation {
+  """Papel ao aceitar o convite."""
+  assignedRole: OrganizationRole!
   expiresAt: DateTime!
   id: ID!
 
@@ -97,7 +143,7 @@ type MyInvitation {
   organization: InvitationOrganization!
 
   """Papel ao aceitar o convite."""
-  role: MembershipRole!
+  role: MembershipRole! @deprecated(reason: "Use assignedRole.")
 }
 
 type Organization {
@@ -108,10 +154,15 @@ type Organization {
   status: OrganizationStatus!
 
   """Papel do usuário autenticado nesta organização."""
-  viewerRole: MembershipRole!
+  viewerAssignedRole: OrganizationRole!
+
+  """Papel do usuário autenticado nesta organização."""
+  viewerRole: MembershipRole! @deprecated(reason: "Use viewerAssignedRole.")
 }
 
 type OrganizationInvitation {
+  """Papel ao aceitar o convite."""
+  assignedRole: OrganizationRole!
   createdAt: DateTime!
   email: String!
 
@@ -123,7 +174,7 @@ type OrganizationInvitation {
   invitedBy: InvitationInviter!
 
   """Papel ao aceitar o convite."""
-  role: MembershipRole!
+  role: MembershipRole! @deprecated(reason: "Use assignedRole.")
   status: InvitationStatus!
 }
 
@@ -133,6 +184,7 @@ type OrganizationInvitationConnection {
 }
 
 type OrganizationMember {
+  assignedRole: OrganizationRole!
   email: String!
 
   """
@@ -140,13 +192,30 @@ type OrganizationMember {
   """
   joinedAt: DateTime!
   name: String!
-  role: MembershipRole!
+  role: MembershipRole! @deprecated(reason: "Use assignedRole.")
   userId: ID!
 }
 
 type OrganizationMemberConnection {
   nodes: [OrganizationMember!]!
   pageInfo: PageInfo!
+}
+
+type OrganizationRole {
+  createdAt: DateTime!
+  id: ID!
+
+  """Membros ativos com o papel."""
+  memberCount: Int!
+  name: String!
+
+  """
+  Permissões efetivas, na ordem do catálogo. O OWNER tem o catálogo inteiro.
+  """
+  permissions: [String!]!
+
+  """Nulo em papel personalizado."""
+  systemKey: RoleSystemKey
 }
 
 enum OrganizationStatus {
@@ -157,6 +226,12 @@ enum OrganizationStatus {
 type PageInfo {
   endCursor: String
   hasNextPage: Boolean!
+}
+
+type PermissionDefinition {
+  """Texto curto para exibir no front."""
+  description: String!
+  key: String!
 }
 
 input ProvisionMeInput {
@@ -174,6 +249,11 @@ type Query {
   """Organizações das quais o usuário autenticado é membro ativo."""
   myOrganizations: [Organization!]!
 
+  """
+  Permissões efetivas do usuário autenticado na organização; o OWNER recebe o catálogo inteiro.
+  """
+  myPermissions(organizationId: ID!): [String!]!
+
   """Uma organização da qual o usuário autenticado é membro."""
   organization(organizationId: ID!): Organization!
 
@@ -184,6 +264,20 @@ type Query {
 
   """Membros ativos da organização, do mais antigo para o mais recente."""
   organizationMembers(after: String, first: Int, organizationId: ID!): OrganizationMemberConnection!
+
+  """
+  Papéis da organização, sem os apagados: os de sistema primeiro, depois por nome. Exige roles:read.
+  """
+  organizationRoles(organizationId: ID!): [OrganizationRole!]!
+
+  """Catálogo das permissões que um papel pode ter."""
+  permissionCatalog: [PermissionDefinition!]!
+}
+
+"""Papéis com que toda organização nasce."""
+enum RoleSystemKey {
+  MEMBER
+  OWNER
 }
 
 input UpdateMyProfileInput {
@@ -194,6 +288,17 @@ input UpdateMyProfileInput {
 input UpdateOrganizationInput {
   """Novo nome de exibição (2 a 100 caracteres)."""
   name: String!
+}
+
+input UpdateRoleInput {
+  """Ausente ou nulo: não muda. Papéis de sistema não mudam de nome."""
+  name: String
+
+  """
+  Substitui todas as permissões. Ausente ou nulo: não muda. Só é possível adicionar ou remover permissões que você tem.
+  """
+  permissions: [String!]
+  roleId: ID!
 }
 
 type User {

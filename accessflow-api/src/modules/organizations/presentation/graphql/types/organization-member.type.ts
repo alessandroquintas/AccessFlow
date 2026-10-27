@@ -1,6 +1,7 @@
 import { OrganizationMember } from '@/modules/organizations/application/dto/organization-member';
 import { MembershipRole, membershipRoleOf } from '../../membership-role';
 import { Field, ID, ObjectType } from '@nestjs/graphql';
+import { OrganizationRoleType } from './organization-role.type';
 
 @ObjectType('OrganizationMember')
 export class OrganizationMemberType {
@@ -13,8 +14,11 @@ export class OrganizationMemberType {
   @Field()
   email!: string;
 
-  @Field(() => MembershipRole)
+  @Field(() => MembershipRole, { deprecationReason: 'Use assignedRole.' })
   role!: MembershipRole;
+
+  @Field(() => OrganizationRoleType)
+  assignedRole!: OrganizationRoleType;
 
   @Field({
     description:
@@ -32,6 +36,7 @@ export class OrganizationMemberType {
     type.name = profile.name;
     type.email = profile.email;
     type.role = membershipRoleOf(role);
+    type.assignedRole = OrganizationRoleType.from(role);
     type.joinedAt = membership.createdAt;
     return type;
   }
