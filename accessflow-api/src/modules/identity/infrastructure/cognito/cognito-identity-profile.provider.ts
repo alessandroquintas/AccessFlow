@@ -31,28 +31,25 @@ export class CognitoIdentityProfileProvider extends IdentityProfilePort {
       const output = await this.client.send(
         new GetUserCommand({ AccessToken: accessToken }),
       );
-      const atribute = (name: string) =>
+      const attribute = (name: string) =>
         output.UserAttributes?.find((attr) => attr.Name === name)?.Value;
 
-      const sub = atribute('sub');
-      const email = atribute('email');
+      const sub = attribute('sub');
+      const email = attribute('email');
 
-      if (!sub || !email) {
-        throw new Error('Cognito GetUser não retornou sub ou email');
-        this.logger.log('Sub:', sub, 'Email:', email);
-      }
+      if (!sub || !email)
+        throw new Error('Cognito GetUser não retornou sub ou email.');
 
       return {
         sub,
         email,
-        emailVerified: atribute('email_verified') === 'true',
+        emailVerified: attribute('email_verified') === 'true',
       };
     } catch (error) {
       if (error instanceof NotAuthorizedException) {
         this.logger.warn(`GetUser recusado: ${error.message}`);
         throw new InvalidAccessTokenError();
       }
-
       throw error;
     }
   }
