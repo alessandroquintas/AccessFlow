@@ -5,7 +5,7 @@ import {
 } from '@/modules/organizations/domain/entities/invitation.entity';
 import { MembershipRole, membershipRoleOf } from '../../membership-role';
 import { Field, ID, ObjectType, registerEnumType } from '@nestjs/graphql';
-import { OrganizationRoleType } from './organization-role.type';
+import { RoleSummaryType } from './role-summary.type';
 
 /** Status exposto: o do domínio mais EXPIRED, que nunca é gravado. */
 export const InvitationStatusView = {
@@ -53,10 +53,10 @@ export class OrganizationInvitationType {
   })
   role!: MembershipRole;
 
-  @Field(() => OrganizationRoleType, {
+  @Field(() => RoleSummaryType, {
     description: 'Papel ao aceitar o convite.',
   })
-  assignedRole!: OrganizationRoleType;
+  assignedRole!: RoleSummaryType;
 
   @Field(() => InvitationStatusView)
   status!: InvitationStatusView;
@@ -82,7 +82,7 @@ export class OrganizationInvitationType {
     type.id = invitation.id;
     type.email = invitation.email;
     type.role = membershipRoleOf(role);
-    type.assignedRole = OrganizationRoleType.from(role);
+    type.assignedRole = RoleSummaryType.from(role);
     type.status = invitationStatusAt(invitation, now);
     type.expiresAt = invitation.expiresAt;
     type.createdAt = invitation.createdAt;

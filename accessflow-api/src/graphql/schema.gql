@@ -134,7 +134,7 @@ type Mutation {
 
 type MyInvitation {
   """Papel ao aceitar o convite."""
-  assignedRole: OrganizationRole!
+  assignedRole: RoleSummary!
   expiresAt: DateTime!
   id: ID!
 
@@ -162,7 +162,7 @@ type Organization {
 
 type OrganizationInvitation {
   """Papel ao aceitar o convite."""
-  assignedRole: OrganizationRole!
+  assignedRole: RoleSummary!
   createdAt: DateTime!
   email: String!
 
@@ -184,7 +184,7 @@ type OrganizationInvitationConnection {
 }
 
 type OrganizationMember {
-  assignedRole: OrganizationRole!
+  assignedRole: RoleSummary!
   email: String!
 
   """
@@ -272,6 +272,14 @@ type Query {
 
   """Catálogo das permissões que um papel pode ter."""
   permissionCatalog: [PermissionDefinition!]!
+}
+
+type RoleSummary {
+  id: ID!
+  name: String!
+
+  """Nulo em papel personalizado."""
+  systemKey: RoleSystemKey
 }
 
 """Papéis com que toda organização nasce."""

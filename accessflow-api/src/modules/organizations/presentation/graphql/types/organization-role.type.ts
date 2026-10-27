@@ -1,30 +1,15 @@
 import { OrganizationRole } from '@/modules/organizations/application/dto/organization-role';
-import {
-  Role,
-  RoleSystemKey,
-} from '@/modules/organizations/domain/entities/role.entity';
-import { Field, ID, ObjectType, registerEnumType } from '@nestjs/graphql';
+import { Role } from '@/modules/organizations/domain/entities/role.entity';
+import { Field, ObjectType } from '@nestjs/graphql';
+import { RoleSummaryType } from './role-summary.type';
 
-registerEnumType(RoleSystemKey, {
-  name: 'RoleSystemKey',
-  description: 'Papéis com que toda organização nasce.',
-});
-
-/** `memberCount` é resolvido no RolesResolver. */
+/**
+ * O papel completo, com permissões e contagem. Só sai em operações de papel
+ * (roles:read ou roles:manage) e no papel do próprio viewer. `memberCount` é
+ * resolvido no RolesResolver.
+ */
 @ObjectType('OrganizationRole')
-export class OrganizationRoleType {
-  @Field(() => ID)
-  id!: string;
-
-  @Field()
-  name!: string;
-
-  @Field(() => RoleSystemKey, {
-    nullable: true,
-    description: 'Nulo em papel personalizado.',
-  })
-  systemKey!: RoleSystemKey | null;
-
+export class OrganizationRoleType extends RoleSummaryType {
   @Field(() => [String], {
     description:
       'Permissões efetivas, na ordem do catálogo. O OWNER tem o catálogo inteiro.',
@@ -52,7 +37,7 @@ export class OrganizationRoleType {
     return type;
   }
 
-  static fromSummary({ role, memberCount }: OrganizationRole) {
+  static fromOrganizationRole({ role, memberCount }: OrganizationRole) {
     return OrganizationRoleType.from(role, memberCount);
   }
 }

@@ -63,7 +63,7 @@ export class RolesResolver {
       organizationId,
     });
 
-    return roles.map(OrganizationRoleType.fromSummary);
+    return roles.map(OrganizationRoleType.fromOrganizationRole);
   }
 
   @Query(() => [PermissionDefinitionType], {
@@ -102,7 +102,7 @@ export class RolesResolver {
       permissions: input.permissions,
     });
 
-    return OrganizationRoleType.fromSummary(role);
+    return OrganizationRoleType.fromOrganizationRole(role);
   }
 
   @Mutation(() => OrganizationRoleType, {
@@ -122,7 +122,7 @@ export class RolesResolver {
       permissions: input.permissions ?? undefined,
     });
 
-    return OrganizationRoleType.fromSummary(role);
+    return OrganizationRoleType.fromOrganizationRole(role);
   }
 
   @Mutation(() => Boolean, {
@@ -163,9 +163,10 @@ export class RolesResolver {
   }
 
   /**
-   * Pronto quando o caso de uso já contou; senão, uma consulta por
-   * organização e requisição, compartilhada por todos os papéis dela (ex.:
-   * os assignedRole de uma página de membros).
+   * Pronto quando o caso de uso já contou (organizationRoles, createRole,
+   * updateRole); senão, uma consulta por organização e requisição,
+   * compartilhada por todos os papéis dela (ex.: os viewerAssignedRole de
+   * myOrganizations).
    */
   @ResolveField(() => Int, { description: 'Membros ativos com o papel.' })
   async memberCount(

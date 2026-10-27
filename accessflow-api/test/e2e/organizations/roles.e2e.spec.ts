@@ -48,15 +48,15 @@ const DELETE_ROLE = `mutation DeleteRole($orgId: ID!, $roleId: ID!) {
 }`;
 const ASSIGN_ROLE = `mutation Assign($orgId: ID!, $userId: ID!, $roleId: ID!) {
   assignRole(organizationId: $orgId, input: { userId: $userId, roleId: $roleId }) {
-    userId role assignedRole { id name memberCount }
+    userId role assignedRole { id name systemKey }
   }
 }`;
 const INVITE = `mutation Invite($orgId: ID!, $email: String!, $role: MembershipRole, $roleId: ID) {
   inviteMember(organizationId: $orgId, input: { email: $email, role: $role, roleId: $roleId }) {
-    id role assignedRole { id name systemKey permissions }
+    id role assignedRole { id name systemKey }
   }
 }`;
-const MY_INVITATIONS = `query { myInvitations { id role assignedRole { id name permissions } } }`;
+const MY_INVITATIONS = `query { myInvitations { id role assignedRole { id name systemKey } } }`;
 const ACCEPT = `mutation Accept($id: ID!) {
   acceptInvitation(invitationId: $id) {
     id viewerRole viewerAssignedRole { id name memberCount }
@@ -64,7 +64,7 @@ const ACCEPT = `mutation Accept($id: ID!) {
 }`;
 const MEMBERS = `query Members($orgId: ID!) {
   organizationMembers(organizationId: $orgId) {
-    nodes { userId role assignedRole { id name systemKey memberCount } }
+    nodes { userId role assignedRole { id name systemKey } }
   }
 }`;
 const REVOKE = `mutation Revoke($orgId: ID!, $id: ID!) {
@@ -198,22 +198,13 @@ describe('Papéis (e2e)', () => {
     );
     expect(invitation).toMatchObject({
       role: 'CUSTOM',
-      assignedRole: {
-        id: finance.id,
-        name: 'Financeiro',
-        systemKey: null,
-        permissions: [MEMBERS_READ, MEMBERS_INVITE],
-      },
+      assignedRole: { id: finance.id, name: 'Financeiro', systemKey: null },
     });
     expect(await ok(MY_INVITATIONS, {}, 'token-bruno')).toEqual([
       {
         id: invitation.id,
         role: 'CUSTOM',
-        assignedRole: {
-          id: finance.id,
-          name: 'Financeiro',
-          permissions: [MEMBERS_READ, MEMBERS_INVITE],
-        },
+        assignedRole: { id: finance.id, name: 'Financeiro', systemKey: null },
       },
     ]);
 
@@ -232,12 +223,12 @@ describe('Papéis (e2e)', () => {
         {
           userId: ana.id,
           role: 'OWNER',
-          assignedRole: { id: ownerRoleId, systemKey: 'OWNER', memberCount: 1 },
+          assignedRole: { id: ownerRoleId, name: 'Owner', systemKey: 'OWNER' },
         },
         {
           userId: bruno.id,
           role: 'CUSTOM',
-          assignedRole: { id: finance.id, systemKey: null, memberCount: 1 },
+          assignedRole: { id: finance.id, name: 'Financeiro', systemKey: null },
         },
       ],
     });
@@ -264,7 +255,7 @@ describe('Papéis (e2e)', () => {
     ).toEqual({
       userId: bruno.id,
       role: 'CUSTOM',
-      assignedRole: { id: accounting.id, name: 'Contábil', memberCount: 1 },
+      assignedRole: { id: accounting.id, name: 'Contábil', systemKey: null },
     });
     expect(await ok(MY_PERMISSIONS, { orgId }, 'token-bruno')).toEqual([
       MEMBERS_READ,
@@ -547,5 +538,118 @@ describe('Papéis (e2e)', () => {
     expect(
       await ok(DELETE_ROLE, { orgId, roleId: finance.id }, 'token-ana'),
     ).toBe(true);
+  });
+
+  describe('assignedRole é só RoleSummary: sem permissões nem contagem', () => {
+    it('MEMBER só com members:read não consegue selecionar permissions nem memberCount em organizationMembers', async () => {
+      await seedMembership(prisma, { organizationId: orgId, userId: bruno.id });
+
+      for (const field of ['permissions', 'memberCount']) {
+        const res = await graphql(
+          `query Members($orgId: ID!) {
+            organizationMembers(organizationId: $orgId) {
+              nodes { assignedRole { id ${field} } }
+            }
+          }`,
+          { orgId },
+          'token-bruno',
+        );
+
+        expect(res.body.data).toBeUndefined();
+        expect(res.body.errors[0].extensions.code).toBe(
+          'GRAPHQL_VALIDATION_FAILED',
+        );
+      }
+
+      // O que o RoleSummary tem continua disponível com members:read.
+      expect(await ok(MEMBERS, { orgId }, 'token-bruno')).toMatchObject({
+        nodes: [
+          {
+            userId: ana.id,
+            assignedRole: {
+              id: ownerRoleId,
+              name: 'Owner',
+              systemKey: 'OWNER',
+            },
+          },
+          {
+            userId: bruno.id,
+            assignedRole: {
+              id: memberRoleId,
+              name: 'Member',
+              systemKey: 'MEMBER',
+            },
+          },
+        ],
+      });
+    });
+
+    it('o convidado, em myInvitations, recebe só id, name e systemKey do papel', async () => {
+      const financeId = await seedRole(prisma, {
+        organizationId: orgId,
+        name: 'Financeiro',
+        permissions: [MEMBERS_READ, MEMBERS_INVITE],
+      });
+      await seedMembership(prisma, {
+        organizationId: orgId,
+        userId: (await provision('davi', 'Davi')).id,
+        roleId: financeId,
+      });
+      await ok(
+        INVITE,
+        { orgId, email: 'carla@example.com', roleId: financeId },
+        'token-ana',
+      );
+
+      const [invitation] = await ok<{ assignedRole: unknown }[]>(
+        MY_INVITATIONS,
+        {},
+        'token-carla',
+      );
+      expect(invitation.assignedRole).toEqual({
+        id: financeId,
+        name: 'Financeiro',
+        systemKey: null,
+      });
+
+      for (const field of ['permissions', 'memberCount', 'createdAt']) {
+        const res = await graphql(
+          `query { myInvitations { assignedRole { id ${field} } } }`,
+          {},
+          'token-carla',
+        );
+
+        expect(res.body.errors[0].extensions.code).toBe(
+          'GRAPHQL_VALIDATION_FAILED',
+        );
+      }
+    });
+
+    it('viewerAssignedRole continua completo: é o papel do próprio viewer', async () => {
+      await seedMembership(prisma, { organizationId: orgId, userId: bruno.id });
+
+      const res = await graphql(
+        `
+          query Org($orgId: ID!) {
+            organization(organizationId: $orgId) {
+              viewerAssignedRole {
+                id
+                permissions
+                memberCount
+              }
+            }
+          }
+        `,
+        { orgId },
+        'token-bruno',
+      );
+
+      expect(res.body.errors).toBeUndefined();
+      expect(res.body.data.organization.viewerAssignedRole).toEqual({
+        id: memberRoleId,
+        permissions: [MEMBERS_READ],
+        memberCount: 1,
+      });
+    });
   });
 });
