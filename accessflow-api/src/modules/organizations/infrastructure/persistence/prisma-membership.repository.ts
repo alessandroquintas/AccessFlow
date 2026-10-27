@@ -3,7 +3,8 @@ import {
   MembershipRole as PrismaMembershipRole,
   MembershipStatus as PrismaMembershipStatus,
 } from '@prisma/client';
-import { PrismaService } from '@/shared/infrastructure/database/prisma.service';
+import { TransactionManager } from '@/shared/application/ports/transaction-manager.port';
+import { PrismaClientProvider } from '@/shared/infrastructure/database/prisma-client.provider';
 import { Membership } from '@/modules/organizations/domain/entities/membership.entity';
 import { LastOwnerError } from '@/modules/organizations/domain/errors/last-owner.error';
 import {
@@ -15,7 +16,10 @@ import { PrismaMembershipMapper } from './mappers/prisma-membership.mapper';
 
 @Injectable()
 export class PrismaMembershipRepository extends MembershipRepository {
-  constructor(private readonly prisma: PrismaService) {
+  constructor(
+    private readonly clients: PrismaClientProvider,
+    private readonly transactions: TransactionManager,
+  ) {
     super();
   }
 
@@ -23,7 +27,7 @@ export class PrismaMembershipRepository extends MembershipRepository {
     organizationId: string,
     userId: string,
   ): Promise<Membership | null> {
-    const record = await this.prisma.membership.findUnique({
+    const record = await this.clients.current().membership.findUnique({
       where: {
         organizationId_userId: {
           organizationId,
@@ -35,7 +39,7 @@ export class PrismaMembershipRepository extends MembershipRepository {
   }
 
   async listActiveByUser(userId: string): Promise<Membership[]> {
-    const records = await this.prisma.membership.findMany({
+    const records = await this.clients.current().membership.findMany({
       where: {
         userId,
         status: PrismaMembershipStatus.ACTIVE,
@@ -52,7 +56,7 @@ export class PrismaMembershipRepository extends MembershipRepository {
     { first, after }: { first: number; after?: MembershipCursor },
   ): Promise<MembershipPage> {
     // Um item a mais indica se existe próxima página, sem precisar de count.
-    const records = await this.prisma.membership.findMany({
+    const records = await this.clients.current().membership.findMany({
       where: {
         organizationId,
         status: PrismaMembershipStatus.ACTIVE,
@@ -74,7 +78,8 @@ export class PrismaMembershipRepository extends MembershipRepository {
   }
 
   async remove(membership: Membership): Promise<void> {
-    await this.prisma.$transaction(async (tx) => {
+    await this.transactions.run(async () => {
+      const tx = this.clients.current();
       // Trava a organização: remoções concorrentes nela esperam aqui e só
       // contam os OWNERs depois que a anterior terminar.
       await tx.$queryRaw`SELECT id FROM organizations WHERE id = ${membership.organizationId}::uuid FOR UPDATE`;

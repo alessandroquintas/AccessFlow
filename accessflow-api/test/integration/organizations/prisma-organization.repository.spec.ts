@@ -1,5 +1,7 @@
 import { afterAll, beforeAll, beforeEach, describe, expect, it } from 'vitest';
 import { PrismaService } from '@/shared/infrastructure/database/prisma.service';
+import { PrismaClientProvider } from '@/shared/infrastructure/database/prisma-client.provider';
+import { PrismaTransactionManager } from '@/shared/infrastructure/database/prisma-transaction-manager';
 import { Organization } from '@/modules/organizations/domain/entities/organization.entity';
 import {
   Membership,
@@ -51,8 +53,10 @@ describe('Repositórios de organizations (integração)', () => {
   beforeAll(async () => {
     prisma = new PrismaService();
     await prisma.$connect();
-    organizations = new PrismaOrganizationRepository(prisma);
-    memberships = new PrismaMembershipRepository(prisma);
+    const clients = new PrismaClientProvider(prisma);
+    const transactions = new PrismaTransactionManager(prisma, clients);
+    organizations = new PrismaOrganizationRepository(clients, transactions);
+    memberships = new PrismaMembershipRepository(clients, transactions);
   });
 
   afterAll(async () => {

@@ -1,5 +1,6 @@
 import { afterAll, beforeAll, beforeEach, describe, expect, it } from 'vitest';
 import { PrismaService } from '@/shared/infrastructure/database/prisma.service';
+import { PrismaClientProvider } from '@/shared/infrastructure/database/prisma-client.provider';
 import { PrismaUserRepository } from '@/modules/identity/infrastructure/persistence/prisma-user.repository';
 import {
   User,
@@ -14,7 +15,7 @@ describe('PrismaUserRepository (integração)', () => {
   beforeAll(async () => {
     prisma = new PrismaService();
     await prisma.$connect();
-    sut = new PrismaUserRepository(prisma);
+    sut = new PrismaUserRepository(new PrismaClientProvider(prisma));
   });
 
   afterAll(async () => {

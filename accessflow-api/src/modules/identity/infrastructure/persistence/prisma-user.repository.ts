@@ -1,19 +1,19 @@
 import { Injectable } from '@nestjs/common';
 import { UserRepository } from '../../domain/repositories/user.repository';
 import { User } from '../../domain/entities/user.entity';
-import { PrismaService } from '@/shared/infrastructure/database/prisma.service';
+import { PrismaClientProvider } from '@/shared/infrastructure/database/prisma-client.provider';
 import { isUniqueViolation } from '@/shared/infrastructure/database/prisma-errors';
 import { PrismaUserMapper } from './mappers/prisma-user.mapper';
 import { UserAlreadyExistsError } from '../../domain/errors/user-already-exists.error';
 
 @Injectable()
 export class PrismaUserRepository extends UserRepository {
-  constructor(private readonly prisma: PrismaService) {
+  constructor(private readonly clients: PrismaClientProvider) {
     super();
   }
 
   async findByCognitoSub(cognitoSub: string): Promise<User | null> {
-    const data = await this.prisma.user.findUnique({
+    const data = await this.clients.current().user.findUnique({
       where: {
         cognitoSub,
       },
@@ -27,7 +27,7 @@ export class PrismaUserRepository extends UserRepository {
       return [];
     }
 
-    const records = await this.prisma.user.findMany({
+    const records = await this.clients.current().user.findMany({
       where: {
         id: {
           in: ids,
@@ -39,7 +39,7 @@ export class PrismaUserRepository extends UserRepository {
   }
 
   async findByEmail(email: string): Promise<User[]> {
-    const records = await this.prisma.user.findMany({
+    const records = await this.clients.current().user.findMany({
       where: {
         email,
       },
@@ -50,7 +50,7 @@ export class PrismaUserRepository extends UserRepository {
 
   async create(user: User): Promise<void> {
     try {
-      await this.prisma.user.create({
+      await this.clients.current().user.create({
         data: PrismaUserMapper.toPersistence(user),
       });
     } catch (error) {
@@ -66,7 +66,7 @@ export class PrismaUserRepository extends UserRepository {
     // desfaria mudanças concorrentes, como uma desativação.
     const { id, name, updatedAt } = PrismaUserMapper.toPersistence(user);
 
-    await this.prisma.user.update({
+    await this.clients.current().user.update({
       where: {
         id,
       },

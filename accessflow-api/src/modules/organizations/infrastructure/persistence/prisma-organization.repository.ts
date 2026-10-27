@@ -1,5 +1,6 @@
 import { Injectable } from '@nestjs/common';
-import { PrismaService } from '@/shared/infrastructure/database/prisma.service';
+import { TransactionManager } from '@/shared/application/ports/transaction-manager.port';
+import { PrismaClientProvider } from '@/shared/infrastructure/database/prisma-client.provider';
 import { isUniqueViolation } from '@/shared/infrastructure/database/prisma-errors';
 import { Organization } from '@/modules/organizations/domain/entities/organization.entity';
 import { Membership } from '@/modules/organizations/domain/entities/membership.entity';
@@ -10,12 +11,15 @@ import { PrismaMembershipMapper } from './mappers/prisma-membership.mapper';
 
 @Injectable()
 export class PrismaOrganizationRepository extends OrganizationRepository {
-  constructor(private readonly prisma: PrismaService) {
+  constructor(
+    private readonly clients: PrismaClientProvider,
+    private readonly transactions: TransactionManager,
+  ) {
     super();
   }
 
   async findById(id: string): Promise<Organization | null> {
-    const record = await this.prisma.organization.findUnique({
+    const record = await this.clients.current().organization.findUnique({
       where: { id },
     });
     return record ? PrismaOrganizationMapper.toDomain(record) : null;
@@ -26,7 +30,7 @@ export class PrismaOrganizationRepository extends OrganizationRepository {
       return [];
     }
 
-    const records = await this.prisma.organization.findMany({
+    const records = await this.clients.current().organization.findMany({
       where: {
         id: {
           in: ids,
@@ -42,14 +46,15 @@ export class PrismaOrganizationRepository extends OrganizationRepository {
     owner: Membership,
   ): Promise<void> {
     try {
-      await this.prisma.$transaction([
-        this.prisma.organization.create({
+      await this.transactions.run(async () => {
+        const db = this.clients.current();
+        await db.organization.create({
           data: PrismaOrganizationMapper.toPersistence(organization),
-        }),
-        this.prisma.membership.create({
+        });
+        await db.membership.create({
           data: PrismaMembershipMapper.toPersistence(owner),
-        }),
-      ]);
+        });
+      });
     } catch (error) {
       if (isUniqueViolation(error, 'slug')) throw new SlugAlreadyTakenError();
       throw error;
@@ -62,7 +67,7 @@ export class PrismaOrganizationRepository extends OrganizationRepository {
     const { id, name, status, updatedAt } =
       PrismaOrganizationMapper.toPersistence(organization);
 
-    await this.prisma.organization.update({
+    await this.clients.current().organization.update({
       where: {
         id,
       },

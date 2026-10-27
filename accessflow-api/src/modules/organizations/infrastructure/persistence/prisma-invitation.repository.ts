@@ -1,6 +1,7 @@
 import { Injectable } from '@nestjs/common';
 import { InvitationStatus as PrismaInvitationStatus } from '@prisma/client';
-import { PrismaService } from '@/shared/infrastructure/database/prisma.service';
+import { TransactionManager } from '@/shared/application/ports/transaction-manager.port';
+import { PrismaClientProvider } from '@/shared/infrastructure/database/prisma-client.provider';
 import { Invitation } from '@/modules/organizations/domain/entities/invitation.entity';
 import { Membership } from '@/modules/organizations/domain/entities/membership.entity';
 import { InvitationNotFoundError } from '@/modules/organizations/domain/errors/invitation-not-found.error';
@@ -15,12 +16,17 @@ import { PrismaMembershipMapper } from './mappers/prisma-membership.mapper';
 
 @Injectable()
 export class PrismaInvitationRepository extends InvitationRepository {
-  constructor(private readonly prisma: PrismaService) {
+  constructor(
+    private readonly clients: PrismaClientProvider,
+    private readonly transactions: TransactionManager,
+  ) {
     super();
   }
 
   async findById(id: string): Promise<Invitation | null> {
-    const record = await this.prisma.invitation.findUnique({ where: { id } });
+    const record = await this.clients.current().invitation.findUnique({
+      where: { id },
+    });
     return record ? PrismaInvitationMapper.toDomain(record) : null;
   }
 
@@ -31,7 +37,8 @@ export class PrismaInvitationRepository extends InvitationRepository {
       now,
     }: { maxPendingPerOrganization: number; now: Date },
   ): Promise<Invitation> {
-    return this.prisma.$transaction(async (tx) => {
+    return this.transactions.run(async () => {
+      const tx = this.clients.current();
       // Trava a organização: convites concorrentes nela esperam aqui, então
       // a busca do pendente e a contagem do limite não correm em paralelo.
       await tx.$queryRaw`SELECT id FROM organizations WHERE id = ${candidate.organizationId}::uuid FOR UPDATE`;
@@ -89,7 +96,7 @@ export class PrismaInvitationRepository extends InvitationRepository {
     { first, after }: { first: number; after?: InvitationCursor },
   ): Promise<InvitationPage> {
     // Um item a mais indica se existe próxima página, sem precisar de count.
-    const records = await this.prisma.invitation.findMany({
+    const records = await this.clients.current().invitation.findMany({
       where: {
         organizationId,
         status: PrismaInvitationStatus.PENDING,
@@ -111,7 +118,7 @@ export class PrismaInvitationRepository extends InvitationRepository {
   }
 
   async listPendingByEmail(email: string, now: Date): Promise<Invitation[]> {
-    const records = await this.prisma.invitation.findMany({
+    const records = await this.clients.current().invitation.findMany({
       where: {
         email,
         status: PrismaInvitationStatus.PENDING,
@@ -128,7 +135,7 @@ export class PrismaInvitationRepository extends InvitationRepository {
 
     // Só muda se ainda estiver PENDING: duas respostas simultâneas não se
     // sobrescrevem, e a segunda recebe "não encontrado".
-    const { count } = await this.prisma.invitation.updateMany({
+    const { count } = await this.clients.current().invitation.updateMany({
       where: { id: invitation.id, status: PrismaInvitationStatus.PENDING },
       data: { status, updatedAt },
     });
@@ -141,7 +148,8 @@ export class PrismaInvitationRepository extends InvitationRepository {
   ): Promise<Membership> {
     const { organizationId } = invitation;
 
-    return this.prisma.$transaction(async (tx) => {
+    return this.transactions.run(async () => {
+      const tx = this.clients.current();
       // Trava o convite: um segundo aceite espera aqui e, ao seguir, já o
       // encontra ACCEPTED.
       const [locked] = await tx.$queryRaw<

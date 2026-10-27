@@ -8,6 +8,8 @@ import {
   vi,
 } from 'vitest';
 import { PrismaService } from '@/shared/infrastructure/database/prisma.service';
+import { PrismaClientProvider } from '@/shared/infrastructure/database/prisma-client.provider';
+import { PrismaTransactionManager } from '@/shared/infrastructure/database/prisma-transaction-manager';
 import { Organization } from '@/modules/organizations/domain/entities/organization.entity';
 import {
   Membership,
@@ -35,6 +37,8 @@ const at = (ms: number) => new Date(NOW.getTime() + ms);
 const limitAt = (now = NOW) => ({ maxPendingPerOrganization: 50, now });
 
 let prisma: PrismaService;
+let clients: PrismaClientProvider;
+let transactions: PrismaTransactionManager;
 let organizations: PrismaOrganizationRepository;
 let invitations: PrismaInvitationRepository;
 
@@ -91,8 +95,10 @@ describe('PrismaInvitationRepository (integração)', () => {
   beforeAll(async () => {
     prisma = new PrismaService();
     await prisma.$connect();
-    organizations = new PrismaOrganizationRepository(prisma);
-    invitations = new PrismaInvitationRepository(prisma);
+    clients = new PrismaClientProvider(prisma);
+    transactions = new PrismaTransactionManager(prisma, clients);
+    organizations = new PrismaOrganizationRepository(clients, transactions);
+    invitations = new PrismaInvitationRepository(clients, transactions);
   });
 
   afterAll(async () => {
@@ -621,7 +627,7 @@ describe('PrismaInvitationRepository (integração)', () => {
 
       const users = new FakeUserDirectory();
       users.register('sub-bruno', bruno.id, { email: 'sub-bruno@example.com' });
-      const memberships = new PrismaMembershipRepository(prisma);
+      const memberships = new PrismaMembershipRepository(clients, transactions);
       const sut = new AcceptInvitationUseCase(
         invitations,
         organizations,
