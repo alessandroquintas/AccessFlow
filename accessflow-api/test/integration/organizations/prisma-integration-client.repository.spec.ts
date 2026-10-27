@@ -26,7 +26,7 @@ describe('PrismaIntegrationClientRepository (integração)', () => {
   });
 
   beforeEach(async () => {
-    await prisma.$executeRaw`TRUNCATE TABLE "integration_clients", "memberships", "organizations", "users" CASCADE`;
+    await prisma.$executeRaw`TRUNCATE TABLE "invitations", "integration_clients", "memberships", "organizations", "users" CASCADE`;
   });
 
   it('encontra o client pelo clientId do Cognito', async () => {

@@ -42,7 +42,7 @@ describe('Mutation provisionMe (e2e)', () => {
   beforeEach(async () => {
     tokens.reset();
     profiles.reset();
-    await prisma.$executeRaw`TRUNCATE TABLE "users" CASCADE`;
+    await prisma.$executeRaw`TRUNCATE TABLE "invitations", "users" CASCADE`;
 
     tokens.register('token-ana', { sub: 'sub-ana' });
     profiles.register('token-ana', {

@@ -1,6 +1,6 @@
 import { randomUUID } from 'node:crypto';
 import { InvalidUserError } from '../errors/invalid-user.error';
-import { Email } from '../value-objects/email.vo';
+import { Email } from '@/shared/domain/value-objects/email.vo';
 import { UserName } from '../value-objects/user-name.vo';
 
 export const UserStatus = {

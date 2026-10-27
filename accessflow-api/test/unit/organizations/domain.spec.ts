@@ -7,6 +7,7 @@ import {
   MembershipStatus,
 } from '@/modules/organizations/domain/entities/membership.entity';
 import { InvalidOrganizationError } from '@/modules/organizations/domain/errors/invalid-organization.error';
+import { InvalidMembershipError } from '@/modules/organizations/domain/errors/invalid-membership.error';
 
 describe('Slug', () => {
   it.each(['acme', 'acme-corp', 'time-2026', 'abc'])('aceita "%s"', (raw) => {
@@ -93,5 +94,42 @@ describe('Membership', () => {
     membership.remove(new Date(removedAt.getTime() + 1000));
 
     expect(membership.updatedAt).toEqual(removedAt);
+  });
+
+  describe('reactivate', () => {
+    it('volta de REMOVED para ACTIVE com o papel informado', () => {
+      const joinedAt = new Date('2026-01-01T00:00:00Z');
+      const membership = Membership.create(
+        {
+          organizationId: 'org-1',
+          userId: 'user-1',
+          role: MembershipRole.MEMBER,
+        },
+        joinedAt,
+      );
+      membership.remove(new Date('2026-01-02T00:00:00Z'));
+      const now = new Date('2026-01-03T00:00:00Z');
+
+      membership.reactivate(MembershipRole.OWNER, now);
+
+      expect(membership.status).toBe(MembershipStatus.ACTIVE);
+      expect(membership.role).toBe(MembershipRole.OWNER);
+      expect(membership.isOwner()).toBe(true);
+      expect(membership.updatedAt).toEqual(now);
+      expect(membership.createdAt).toEqual(joinedAt);
+    });
+
+    it('recusa reativar um membership ativo, sem mudar o papel', () => {
+      const membership = Membership.create({
+        organizationId: 'org-1',
+        userId: 'user-1',
+        role: MembershipRole.MEMBER,
+      });
+
+      expect(() =>
+        membership.reactivate(MembershipRole.OWNER, new Date()),
+      ).toThrow(InvalidMembershipError);
+      expect(membership.role).toBe(MembershipRole.MEMBER);
+    });
   });
 });

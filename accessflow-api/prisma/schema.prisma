@@ -32,6 +32,13 @@ enum IntegrationClientStatus {
   REVOKED
 }
 
+enum InvitationStatus {
+  PENDING
+  ACCEPTED
+  DECLINED
+  REVOKED
+}
+
 model Organization {
   id                 String              @id @default(uuid()) @db.Uuid
   name               String
@@ -41,6 +48,7 @@ model Organization {
   updatedAt          DateTime            @updatedAt @map("updated_at") @db.Timestamptz(3)
   memberships        Membership[]
   integrationClients IntegrationClient[]
+  invitations        Invitation[]
 
   @@map("organizations")
 }
@@ -78,15 +86,38 @@ model Membership {
   @@map("memberships")
 }
 
+model Invitation {
+  id              String           @id @default(uuid()) @db.Uuid
+  organizationId  String           @map("organization_id") @db.Uuid
+  email           String
+  role            MembershipRole
+  status          InvitationStatus @default(PENDING)
+  invitedByUserId String           @map("invited_by_user_id") @db.Uuid
+  expiresAt       DateTime         @map("expires_at") @db.Timestamptz(3)
+  createdAt       DateTime         @default(now()) @map("created_at") @db.Timestamptz(3)
+  updatedAt       DateTime         @updatedAt @map("updated_at") @db.Timestamptz(3)
+
+  organization Organization @relation(fields: [organizationId], references: [id], onDelete: Restrict)
+  invitedBy    User         @relation(fields: [invitedByUserId], references: [id], onDelete: Restrict)
+
+  // Listagem da organização e contagem do limite de pendentes.
+  @@index([organizationId, status, createdAt, id])
+  // myInvitations.
+  @@index([email, status])
+  @@index([invitedByUserId])
+  @@map("invitations")
+}
+
 model User {
-  id          String       @id @default(uuid()) @db.Uuid
-  cognitoSub  String       @unique @map("cognito_sub")
-  name        String
-  email       String
-  status      UserStatus   @default(ACTIVE)
-  createdAt   DateTime     @default(now()) @map("created_at") @db.Timestamptz(3)
-  updatedAt   DateTime     @updatedAt @map("updated_at") @db.Timestamptz(3)
-  memberships Membership[]
+  id              String       @id @default(uuid()) @db.Uuid
+  cognitoSub      String       @unique @map("cognito_sub")
+  name            String
+  email           String
+  status          UserStatus   @default(ACTIVE)
+  createdAt       DateTime     @default(now()) @map("created_at") @db.Timestamptz(3)
+  updatedAt       DateTime     @updatedAt @map("updated_at") @db.Timestamptz(3)
+  memberships     Membership[]
+  invitationsSent Invitation[]
 
   @@map("users")
 }

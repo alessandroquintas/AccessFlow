@@ -22,7 +22,7 @@ describe('PrismaUserRepository (integração)', () => {
   });
 
   beforeEach(async () => {
-    await prisma.$executeRaw`TRUNCATE TABLE "users" CASCADE`;
+    await prisma.$executeRaw`TRUNCATE TABLE "invitations", "users" CASCADE`;
   });
 
   it('retorna a entidade de domínio quando o cognitoSub existe', async () => {

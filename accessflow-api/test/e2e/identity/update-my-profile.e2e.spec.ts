@@ -49,7 +49,7 @@ describe('Mutation updateMyProfile (e2e)', () => {
 
   beforeEach(async () => {
     tokens.reset();
-    await prisma.$executeRaw`TRUNCATE TABLE "memberships", "organizations", "users" CASCADE`;
+    await prisma.$executeRaw`TRUNCATE TABLE "invitations", "memberships", "organizations", "users" CASCADE`;
   });
 
   it('atualiza o nome e a query me reflete a mudança', async () => {

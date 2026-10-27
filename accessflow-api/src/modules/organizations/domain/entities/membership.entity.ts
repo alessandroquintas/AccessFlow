@@ -120,6 +120,21 @@ export class Membership {
     };
   }
 
+  /** Volta um membership REMOVED para ACTIVE com o papel informado. */
+  reactivate(role: MembershipRole, now: Date): void {
+    if (this.isActive()) {
+      throw new InvalidMembershipError(
+        'Só um membership removido pode ser reativado.',
+      );
+    }
+    this.props = {
+      ...this.props,
+      role,
+      status: MembershipStatus.ACTIVE,
+      updatedAt: now,
+    };
+  }
+
   can(permission: OrganizationPermission): boolean {
     return this.isActive() && roleHasPermission(this.props.role, permission);
   }

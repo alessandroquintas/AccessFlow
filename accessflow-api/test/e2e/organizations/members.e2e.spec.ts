@@ -74,7 +74,7 @@ describe('Membros da organização (e2e)', () => {
 
   beforeEach(async () => {
     tokens.reset();
-    await prisma.$executeRaw`TRUNCATE TABLE "memberships", "organizations", "users" CASCADE`;
+    await prisma.$executeRaw`TRUNCATE TABLE "invitations", "memberships", "organizations", "users" CASCADE`;
 
     ana = await createUser('ana');
     bruno = await createUser('bruno');

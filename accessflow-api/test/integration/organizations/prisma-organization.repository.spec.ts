@@ -60,7 +60,7 @@ describe('Repositórios de organizations (integração)', () => {
   });
 
   beforeEach(async () => {
-    await prisma.$executeRaw`TRUNCATE TABLE "memberships", "organizations", "users" CASCADE`;
+    await prisma.$executeRaw`TRUNCATE TABLE "invitations", "memberships", "organizations", "users" CASCADE`;
   });
 
   it('cria a organização e o OWNER juntos', async () => {

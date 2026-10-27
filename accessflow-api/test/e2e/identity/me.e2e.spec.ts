@@ -51,7 +51,7 @@ describe('Query me (e2e)', () => {
 
   beforeEach(async () => {
     tokens.reset();
-    await prisma.$executeRaw`TRUNCATE TABLE "users" CASCADE`;
+    await prisma.$executeRaw`TRUNCATE TABLE "invitations", "users" CASCADE`;
   });
 
   describe('sucesso', () => {

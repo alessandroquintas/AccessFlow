@@ -1,6 +1,7 @@
 import { beforeEach, describe, expect, it, vi } from 'vitest';
 import { UserStatus } from '@/modules/identity/domain/entities/user.entity';
 import { InvalidUserError } from '@/modules/identity/domain/errors/invalid-user.error';
+import { InvalidEmailError } from '@/shared/domain/errors/invalid-email.error';
 import { UserInactiveError } from '@/modules/identity/domain/errors/user-inactive.error';
 import { EmailNotVerifiedError } from '@/modules/identity/application/errors/email-not-verified.error';
 import { InvalidAccessTokenError } from '@/modules/identity/application/errors/invalid-access-token.error';
@@ -90,6 +91,13 @@ describe('ProvisionUserUseCase', () => {
     await expect(sut.execute({ ...input, name })).rejects.toBeInstanceOf(
       InvalidUserError,
     );
+    expect(users.items).toHaveLength(0);
+  });
+
+  it('recusa e-mail inválido vindo do provedor com INVALID_EMAIL', async () => {
+    profiles.register('token-ana', { sub: 'sub-ana', email: 'sem-arroba' });
+
+    await expect(sut.execute(input)).rejects.toBeInstanceOf(InvalidEmailError);
     expect(users.items).toHaveLength(0);
   });
 

@@ -58,7 +58,7 @@ describe('GET /v1/organizations/:organizationId/members/:userId (e2e)', () => {
   beforeEach(async () => {
     tokens.reset();
     machines.reset();
-    await prisma.$executeRaw`TRUNCATE TABLE "integration_clients", "memberships", "organizations", "users" CASCADE`;
+    await prisma.$executeRaw`TRUNCATE TABLE "invitations", "integration_clients", "memberships", "organizations", "users" CASCADE`;
 
     const ana = await createUser('ana', 'ACTIVE');
     const bruno = await createUser('bruno', 'ACTIVE');

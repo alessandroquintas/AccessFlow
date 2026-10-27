@@ -1,4 +1,4 @@
-import { InvalidUserError } from '../errors/invalid-user.error';
+import { InvalidEmailError } from '../errors/invalid-email.error';
 
 export class Email {
   private static readonly PATTERN = /^[^\s@]+@[^\s@]+\.[^\s@]+$/;
@@ -6,11 +6,12 @@ export class Email {
 
   private constructor(readonly value: string) {}
 
+  /** Normaliza para minúsculas e sem espaços nas pontas. */
   static create(raw: string): Email {
-    const value = raw.trim().toLowerCase() ?? '';
+    const value = raw?.trim().toLowerCase() ?? '';
 
     if (value.length > Email.MAX_LENGTH || !Email.PATTERN.test(value)) {
-      throw new InvalidUserError('email invalido.');
+      throw new InvalidEmailError();
     }
 
     return new Email(value);
