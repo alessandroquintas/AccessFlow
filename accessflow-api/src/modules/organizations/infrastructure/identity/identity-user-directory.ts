@@ -1,6 +1,8 @@
 import { GetCurrentUserUseCase } from '@/modules/identity/application/use-cases/get-current-user.use-case';
 import { GetUsersByIdsUseCase } from '@/modules/identity/application/use-cases/get-users-by-ids.use-case';
+import { GetUserIdsByEmailUseCase } from '@/modules/identity/application/use-cases/get-user-ids-by-email.use-case';
 import {
+  ActiveUser,
   MemberProfile,
   UserDirectoryPort,
 } from '../../application/ports/user-directory.port';
@@ -11,6 +13,7 @@ export class IdentityUserDirectory extends UserDirectoryPort {
   constructor(
     private readonly getCurrentUser: GetCurrentUserUseCase,
     private readonly getUsersByIds: GetUsersByIdsUseCase,
+    private readonly userIdsByEmail: GetUserIdsByEmailUseCase,
   ) {
     super();
   }
@@ -19,6 +22,16 @@ export class IdentityUserDirectory extends UserDirectoryPort {
     const user = await this.getCurrentUser.execute(cognitoSub);
 
     return user.id;
+  }
+
+  async getActiveUser(cognitoSub: string): Promise<ActiveUser> {
+    const user = await this.getCurrentUser.execute(cognitoSub);
+
+    return { id: user.id, email: user.email };
+  }
+
+  async getUserIdsByEmail(email: string): Promise<string[]> {
+    return this.userIdsByEmail.execute(email);
   }
 
   async getProfilesByIds(ids: string[]): Promise<MemberProfile[]> {

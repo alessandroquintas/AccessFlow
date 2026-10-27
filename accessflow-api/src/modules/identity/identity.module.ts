@@ -14,6 +14,7 @@ import { Env } from '@/config/env.schema';
 import { CognitoIdentityProfileProvider } from './infrastructure/cognito/cognito-identity-profile.provider';
 import { ProvisionUserUseCase } from './application/use-cases/provision-user.use-case';
 import { GetUsersByIdsUseCase } from './application/use-cases/get-users-by-ids.use-case';
+import { GetUserIdsByEmailUseCase } from './application/use-cases/get-user-ids-by-email.use-case';
 import { UpdateMyProfileUseCase } from './application/use-cases/update-my-profile.use-case';
 import { MachineTokenVerifierPort } from './application/ports/machine-token-verifier.port';
 import { CognitoMachineTokenVerifier } from './infrastructure/cognito/cognito-machine-token.verifier';
@@ -66,6 +67,12 @@ import { MachineAuthGuard } from './presentation/auth/guards/machine-auth.guard'
       useFactory: (users: UserRepository) => new GetUsersByIdsUseCase(users),
     },
     {
+      provide: GetUserIdsByEmailUseCase,
+      inject: [UserRepository],
+      useFactory: (users: UserRepository) =>
+        new GetUserIdsByEmailUseCase(users),
+    },
+    {
       provide: UpdateMyProfileUseCase,
       inject: [UserRepository, GetCurrentUserUseCase],
       useFactory: (
@@ -80,6 +87,7 @@ import { MachineAuthGuard } from './presentation/auth/guards/machine-auth.guard'
   exports: [
     GetCurrentUserUseCase,
     GetUsersByIdsUseCase,
+    GetUserIdsByEmailUseCase,
     TokenVerifierPort,
     MachineTokenVerifierPort,
     JwtAuthGuard,

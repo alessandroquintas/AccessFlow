@@ -38,6 +38,16 @@ export class PrismaUserRepository extends UserRepository {
     return records.map(PrismaUserMapper.toDomain);
   }
 
+  async findByEmail(email: string): Promise<User[]> {
+    const records = await this.prisma.user.findMany({
+      where: {
+        email,
+      },
+    });
+
+    return records.map(PrismaUserMapper.toDomain);
+  }
+
   async create(user: User): Promise<void> {
     try {
       await this.prisma.user.create({

@@ -3,6 +3,7 @@ import { PrismaModule } from '@/shared/infrastructure/database/prisma.module';
 import { IdentityModule } from '@/modules/identity/identity.module';
 import { GetCurrentUserUseCase } from '@/modules/identity/application/use-cases/get-current-user.use-case';
 import { GetUsersByIdsUseCase } from '@/modules/identity/application/use-cases/get-users-by-ids.use-case';
+import { GetUserIdsByEmailUseCase } from '@/modules/identity/application/use-cases/get-user-ids-by-email.use-case';
 import { OrganizationRepository } from './domain/repositories/organization.repository';
 import { MembershipRepository } from './domain/repositories/membership.repository';
 import { UserDirectoryPort } from './application/ports/user-directory.port';
@@ -39,11 +40,21 @@ import { IntegrationMembersController } from './presentation/http/controllers/in
     // Adaptador para o módulo Identity
     {
       provide: UserDirectoryPort,
-      inject: [GetCurrentUserUseCase, GetUsersByIdsUseCase],
+      inject: [
+        GetCurrentUserUseCase,
+        GetUsersByIdsUseCase,
+        GetUserIdsByEmailUseCase,
+      ],
       useFactory: (
         getCurrentUser: GetCurrentUserUseCase,
         getUsersByIds: GetUsersByIdsUseCase,
-      ) => new IdentityUserDirectory(getCurrentUser, getUsersByIds),
+        getUserIdsByEmail: GetUserIdsByEmailUseCase,
+      ) =>
+        new IdentityUserDirectory(
+          getCurrentUser,
+          getUsersByIds,
+          getUserIdsByEmail,
+        ),
     },
 
     // Serviços de aplicação

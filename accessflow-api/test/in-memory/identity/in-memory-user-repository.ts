@@ -17,6 +17,10 @@ export class InMemoryUserRepository extends UserRepository {
     return this.items.filter((user) => ids.includes(user.id));
   }
 
+  async findByEmail(email: string): Promise<User[]> {
+    return this.items.filter((user) => user.email === email);
+  }
+
   async create(user: User): Promise<void> {
     if (this.items.some((item) => item.cognitoSub === user.cognitoSub)) {
       throw new UserAlreadyExistsError();

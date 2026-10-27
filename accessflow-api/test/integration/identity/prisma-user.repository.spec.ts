@@ -173,4 +173,32 @@ describe('PrismaUserRepository (integração)', () => {
       ),
     ).rejects.toBeInstanceOf(UserAlreadyExistsError);
   });
+
+  it('findByEmail devolve todos os perfis com o e-mail, inativos incluídos', async () => {
+    const ana = await prisma.user.create({
+      data: { cognitoSub: 'sub-ana', name: 'Ana', email: 'ana@example.com' },
+    });
+    const anaOutra = await prisma.user.create({
+      data: {
+        cognitoSub: 'sub-ana-2',
+        name: 'Ana',
+        email: 'ana@example.com',
+        status: 'INACTIVE',
+      },
+    });
+    await prisma.user.create({
+      data: {
+        cognitoSub: 'sub-bruno',
+        name: 'Bruno',
+        email: 'bruno@example.com',
+      },
+    });
+
+    const users = await sut.findByEmail('ana@example.com');
+
+    expect(users.map((user) => user.id).sort()).toEqual(
+      [ana.id, anaOutra.id].sort(),
+    );
+    expect(await sut.findByEmail('carla@example.com')).toEqual([]);
+  });
 });
