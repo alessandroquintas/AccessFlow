@@ -3,6 +3,13 @@ import { Injectable } from '@nestjs/common';
 import { Prisma } from '@prisma/client';
 import { PrismaService } from './prisma.service';
 
+/** Transação aberta por PrismaTransactionManager no contexto assíncrono. */
+export interface ActiveTransaction {
+  readonly client: Prisma.TransactionClient;
+  /** Preenchido quando um `run` interno falha: a transação não pode ter commit. */
+  rollbackOnly?: { cause: unknown };
+}
+
 /**
  * Único acesso dos repositórios ao Prisma. Dentro de um
  * PrismaTransactionManager.run, devolve o cliente da transação ativa; fora
@@ -11,21 +18,21 @@ import { PrismaService } from './prisma.service';
  */
 @Injectable()
 export class PrismaClientProvider {
-  private readonly transaction =
-    new AsyncLocalStorage<Prisma.TransactionClient>();
+  private readonly transaction = new AsyncLocalStorage<ActiveTransaction>();
 
   constructor(private readonly prisma: PrismaService) {}
 
   current(): Prisma.TransactionClient {
-    return this.transaction.getStore() ?? this.prisma;
+    return this.transaction.getStore()?.client ?? this.prisma;
   }
 
-  isInTransaction(): boolean {
-    return this.transaction.getStore() !== undefined;
+  /** Transação ativa, se houver. Uso do PrismaTransactionManager. */
+  active(): ActiveTransaction | undefined {
+    return this.transaction.getStore();
   }
 
-  /** Executa `work` com `tx` como cliente atual. Uso do PrismaTransactionManager. */
-  bind<T>(tx: Prisma.TransactionClient, work: () => Promise<T>): Promise<T> {
-    return this.transaction.run(tx, work);
+  /** Executa `work` com `transaction` como a ativa. Uso do PrismaTransactionManager. */
+  bind<T>(transaction: ActiveTransaction, work: () => Promise<T>): Promise<T> {
+    return this.transaction.run(transaction, work);
   }
 }

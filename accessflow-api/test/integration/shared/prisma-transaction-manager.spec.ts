@@ -1,4 +1,5 @@
 import { afterAll, beforeAll, beforeEach, describe, expect, it } from 'vitest';
+import { TransactionRolledBackError } from '@/shared/application/errors/transaction-rolled-back.error';
 import { PrismaService } from '@/shared/infrastructure/database/prisma.service';
 import { PrismaClientProvider } from '@/shared/infrastructure/database/prisma-client.provider';
 import { PrismaTransactionManager } from '@/shared/infrastructure/database/prisma-transaction-manager';
@@ -133,7 +134,65 @@ describe('PrismaTransactionManager (integração)', () => {
       await users.create(makeUser('sub-bruno'));
     });
     expect(clients.current()).toBe(prisma);
-    expect(clients.isInTransaction()).toBe(false);
+    expect(clients.active()).toBeUndefined();
     expect(await prisma.user.count()).toBe(2);
+  });
+
+  describe('rollback-only', () => {
+    it('externo que captura o erro de um run interno e segue em frente termina com erro e nada gravado', async () => {
+      const innerError = new Error('falha no run interno');
+
+      const outcome = transactions.run(async () => {
+        await users.create(makeUser('sub-ana'));
+        try {
+          await transactions.run(async () => {
+            await users.create(makeUser('sub-bruno'));
+            throw innerError;
+          });
+        } catch {
+          // Engole o erro e segue: sem rollback-only, as duas escritas
+          // iriam para commit.
+        }
+        await users.create(makeUser('sub-carla'));
+        return 'terminou sem lançar';
+      });
+
+      await expect(outcome).rejects.toBeInstanceOf(TransactionRolledBackError);
+      await expect(outcome).rejects.toMatchObject({ cause: innerError });
+      expect(await prisma.user.count()).toBe(0);
+    });
+
+    it('erro de run interno que não é capturado chega ao externo como está', async () => {
+      const innerError = new Error('falha no run interno');
+
+      await expect(
+        transactions.run(async () => {
+          await users.create(makeUser('sub-ana'));
+          await transactions.run(async () => {
+            throw innerError;
+          });
+        }),
+      ).rejects.toBe(innerError);
+      expect(await prisma.user.count()).toBe(0);
+    });
+
+    it('a marca vale só para a transação em que o run interno falhou', async () => {
+      await expect(
+        transactions.run(async () => {
+          await transactions
+            .run(async () => {
+              throw new Error('falha no run interno');
+            })
+            .catch(() => undefined);
+        }),
+      ).rejects.toBeInstanceOf(TransactionRolledBackError);
+
+      await transactions.run(async () => {
+        await transactions.run(async () => {
+          await users.create(makeUser('sub-ana'));
+        });
+      });
+      expect(await prisma.user.count()).toBe(1);
+    });
   });
 });
