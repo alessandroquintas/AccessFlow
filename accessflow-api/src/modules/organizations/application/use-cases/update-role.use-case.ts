@@ -12,6 +12,13 @@ import { ensureRoleNameAvailable } from '../services/ensure-role-name-available'
 import { loadPermissionCatalog } from '../services/load-permission-catalog';
 import { OrganizationAccessService } from '../services/organization-access.service';
 import { requireRole } from '../services/require-role';
+import {
+  AuditAction,
+  AuditDetailsByAction,
+  AuditEvent,
+  userActor,
+} from '../../domain/entities/audit-event.entity';
+import { AuditLog } from '../../domain/repositories/audit-log.repository';
 
 export interface UpdateRoleInput {
   cognitoSub: string;
@@ -23,6 +30,8 @@ export interface UpdateRoleInput {
   permissions?: string[];
 }
 
+type RoleChanges = AuditDetailsByAction['role.updated']['changes'];
+
 export class UpdateRoleUseCase {
   constructor(
     private readonly organizations: OrganizationRepository,
@@ -31,6 +40,7 @@ export class UpdateRoleUseCase {
     private readonly customPermissions: CustomPermissionRepository,
     private readonly users: UserDirectoryPort,
     private readonly access: OrganizationAccessService,
+    private readonly audit: AuditLog,
     private readonly transactions: TransactionManager,
     private readonly clock: ClockPort,
   ) {}
@@ -50,10 +60,14 @@ export class UpdateRoleUseCase {
 
       const role = await requireRole(this.roles, organizationId, input.roleId);
       const now = this.clock.now();
+      const changes: RoleChanges = {};
 
       if (input.name !== undefined) {
         const previous = role.name;
         role.rename(input.name, now);
+        if (role.name !== previous) {
+          changes.name = { from: previous, to: role.name };
+        }
         if (role.name !== previous) {
           ensureRoleNameAvailable(
             await this.roles.listActiveByOrganization(organizationId),
@@ -75,9 +89,28 @@ export class UpdateRoleUseCase {
           before,
           after: role.permissions,
         });
+        const added = role.permissions.filter((p) => !before.includes(p));
+        const removed = before.filter((p) => !role.permissions.includes(p));
+        if (added.length > 0) changes.permissionsAdded = added;
+        if (removed.length > 0) changes.permissionsRemoved = removed;
       }
 
       await this.roles.save(role);
+      // Mesmo nome e mesmo conjunto de permissões não são mudança.
+      if (Object.keys(changes).length > 0) {
+        await this.audit.record(
+          AuditEvent.create(
+            {
+              organizationId,
+              actor: userActor(actorId),
+              action: AuditAction.ROLE_UPDATED,
+              targetId: role.id,
+              details: { changes },
+            },
+            now,
+          ),
+        );
+      }
       return role;
     });
 

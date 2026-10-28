@@ -7,6 +7,12 @@ import { OrganizationRepository } from '../../domain/repositories/organization.r
 import { OrganizationPermission } from '../../policies/organization-permission';
 import { UserDirectoryPort } from '../ports/user-directory.port';
 import { OrganizationAccessService } from '../services/organization-access.service';
+import {
+  AuditAction,
+  AuditEvent,
+  userActor,
+} from '../../domain/entities/audit-event.entity';
+import { AuditLog } from '../../domain/repositories/audit-log.repository';
 
 export interface RevokeInvitationInput {
   cognitoSub: string;
@@ -20,6 +26,7 @@ export class RevokeInvitationUseCase {
     private readonly invitations: InvitationRepository,
     private readonly users: UserDirectoryPort,
     private readonly access: OrganizationAccessService,
+    private readonly audit: AuditLog,
     private readonly transactions: TransactionManager,
     private readonly clock: ClockPort,
   ) {}
@@ -48,8 +55,21 @@ export class RevokeInvitationUseCase {
         throw new InvitationNotFoundError();
       }
 
-      invitation.revoke(this.clock.now());
+      const now = this.clock.now();
+      invitation.revoke(now);
       await this.invitations.respond(invitation);
+      await this.audit.record(
+        AuditEvent.create(
+          {
+            organizationId,
+            actor: userActor(actorId),
+            action: AuditAction.INVITATION_REVOKED,
+            targetId: invitation.id,
+            details: {},
+          },
+          now,
+        ),
+      );
     });
   }
 }

@@ -7,6 +7,12 @@ import { OrganizationPermission } from '../../policies/organization-permission';
 import { UserDirectoryPort } from '../ports/user-directory.port';
 import { OrganizationAccessService } from '../services/organization-access.service';
 import { requireRole } from '../services/require-role';
+import {
+  AuditAction,
+  AuditEvent,
+  userActor,
+} from '../../domain/entities/audit-event.entity';
+import { AuditLog } from '../../domain/repositories/audit-log.repository';
 
 export interface DeleteRoleInput {
   cognitoSub: string;
@@ -20,6 +26,7 @@ export class DeleteRoleUseCase {
     private readonly roles: RoleRepository,
     private readonly users: UserDirectoryPort,
     private readonly access: OrganizationAccessService,
+    private readonly audit: AuditLog,
     private readonly transactions: TransactionManager,
     private readonly clock: ClockPort,
   ) {}
@@ -40,11 +47,24 @@ export class DeleteRoleUseCase {
       );
 
       const role = await requireRole(this.roles, organizationId, input.roleId);
-      role.softDelete(this.clock.now());
+      const now = this.clock.now();
+      role.softDelete(now);
 
       if (await this.roles.isInUse(role.id)) throw new RoleInUseError();
 
       await this.roles.save(role);
+      await this.audit.record(
+        AuditEvent.create(
+          {
+            organizationId,
+            actor: userActor(actorId),
+            action: AuditAction.ROLE_DELETED,
+            targetId: role.id,
+            details: { name: role.name },
+          },
+          now,
+        ),
+      );
     });
   }
 }

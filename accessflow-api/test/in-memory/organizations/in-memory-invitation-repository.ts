@@ -71,6 +71,19 @@ export class InMemoryInvitationRepository extends InvitationRepository {
     return row ? copy(row) : null;
   }
 
+  async findPending(
+    organizationId: string,
+    email: string,
+  ): Promise<Invitation | null> {
+    const row = [...this.rows.values()].find(
+      (i) =>
+        i.organizationId === organizationId &&
+        i.email === email &&
+        isPending(i),
+    );
+    return row ? copy(row) : null;
+  }
+
   async savePending(
     candidate: Invitation,
     {

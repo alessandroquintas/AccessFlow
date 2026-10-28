@@ -53,6 +53,10 @@ import { IntegrationAuthorizationController } from './presentation/http/controll
 import { AuthorizeForIntegrationUseCase } from './application/use-cases/authorize-for-integration.use-case';
 import { AuthorizationSnapshotPort } from './application/ports/authorization-snapshot.port';
 import { PrismaAuthorizationSnapshotReader } from './infrastructure/persistence/prisma-authorization-snapshot.reader';
+import { AuditLog } from './domain/repositories/audit-log.repository';
+import { PrismaAuditLogRepository } from './infrastructure/persistence/prisma-audit-log.repository';
+import { ListAuditEventsUseCase } from './application/use-cases/list-audit-events.use-case';
+import { AuditResolver } from './presentation/graphql/resolvers/audit.resolver';
 import { GetPermissionCatalogUseCase } from './application/use-cases/get-permission-catalog.use-case';
 import { ListOrganizationPermissionsUseCase } from './application/use-cases/list-organization-permissions.use-case';
 import { CreatePermissionUseCase } from './application/use-cases/create-permission.use-case';
@@ -83,6 +87,7 @@ import { DeletePermissionUseCase } from './application/use-cases/delete-permissi
       provide: AuthorizationSnapshotPort,
       useClass: PrismaAuthorizationSnapshotReader,
     },
+    { provide: AuditLog, useClass: PrismaAuditLogRepository },
 
     // Adaptador para o módulo Identity
     {
@@ -123,6 +128,7 @@ import { DeletePermissionUseCase } from './application/use-cases/delete-permissi
         RoleRepository,
         MembershipRepository,
         UserDirectoryPort,
+        AuditLog,
         TransactionManager,
         ClockPort,
       ],
@@ -131,6 +137,7 @@ import { DeletePermissionUseCase } from './application/use-cases/delete-permissi
         roles: RoleRepository,
         memberships: MembershipRepository,
         users: UserDirectoryPort,
+        audit: AuditLog,
         transactions: TransactionManager,
         clock: ClockPort,
       ) =>
@@ -139,6 +146,7 @@ import { DeletePermissionUseCase } from './application/use-cases/delete-permissi
           roles,
           memberships,
           users,
+          audit,
           transactions,
           clock,
         ),
@@ -178,6 +186,7 @@ import { DeletePermissionUseCase } from './application/use-cases/delete-permissi
         OrganizationRepository,
         UserDirectoryPort,
         OrganizationAccessService,
+        AuditLog,
         TransactionManager,
         ClockPort,
       ],
@@ -185,6 +194,7 @@ import { DeletePermissionUseCase } from './application/use-cases/delete-permissi
         organizations: OrganizationRepository,
         users: UserDirectoryPort,
         access: OrganizationAccessService,
+        audit: AuditLog,
         transactions: TransactionManager,
         clock: ClockPort,
       ) =>
@@ -192,6 +202,7 @@ import { DeletePermissionUseCase } from './application/use-cases/delete-permissi
           organizations,
           users,
           access,
+          audit,
           transactions,
           clock,
         ),
@@ -219,6 +230,7 @@ import { DeletePermissionUseCase } from './application/use-cases/delete-permissi
         MembershipRepository,
         UserDirectoryPort,
         OrganizationAccessService,
+        AuditLog,
         TransactionManager,
         ClockPort,
       ],
@@ -227,6 +239,7 @@ import { DeletePermissionUseCase } from './application/use-cases/delete-permissi
         memberships: MembershipRepository,
         users: UserDirectoryPort,
         access: OrganizationAccessService,
+        audit: AuditLog,
         transactions: TransactionManager,
         clock: ClockPort,
       ) =>
@@ -235,6 +248,7 @@ import { DeletePermissionUseCase } from './application/use-cases/delete-permissi
           memberships,
           users,
           access,
+          audit,
           transactions,
           clock,
         ),
@@ -246,6 +260,7 @@ import { DeletePermissionUseCase } from './application/use-cases/delete-permissi
         MembershipRepository,
         UserDirectoryPort,
         OrganizationAccessService,
+        AuditLog,
         TransactionManager,
         ClockPort,
       ],
@@ -254,6 +269,7 @@ import { DeletePermissionUseCase } from './application/use-cases/delete-permissi
         memberships: MembershipRepository,
         users: UserDirectoryPort,
         access: OrganizationAccessService,
+        audit: AuditLog,
         transactions: TransactionManager,
         clock: ClockPort,
       ) =>
@@ -262,6 +278,7 @@ import { DeletePermissionUseCase } from './application/use-cases/delete-permissi
           memberships,
           users,
           access,
+          audit,
           transactions,
           clock,
         ),
@@ -300,6 +317,7 @@ import { DeletePermissionUseCase } from './application/use-cases/delete-permissi
         RoleRepository,
         UserDirectoryPort,
         OrganizationAccessService,
+        AuditLog,
         TransactionManager,
         ClockPort,
       ],
@@ -310,6 +328,7 @@ import { DeletePermissionUseCase } from './application/use-cases/delete-permissi
         roles: RoleRepository,
         users: UserDirectoryPort,
         access: OrganizationAccessService,
+        audit: AuditLog,
         transactions: TransactionManager,
         clock: ClockPort,
       ) =>
@@ -320,6 +339,7 @@ import { DeletePermissionUseCase } from './application/use-cases/delete-permissi
           roles,
           users,
           access,
+          audit,
           transactions,
           clock,
         ),
@@ -352,6 +372,7 @@ import { DeletePermissionUseCase } from './application/use-cases/delete-permissi
         InvitationRepository,
         UserDirectoryPort,
         OrganizationAccessService,
+        AuditLog,
         TransactionManager,
         ClockPort,
       ],
@@ -360,6 +381,7 @@ import { DeletePermissionUseCase } from './application/use-cases/delete-permissi
         invitations: InvitationRepository,
         users: UserDirectoryPort,
         access: OrganizationAccessService,
+        audit: AuditLog,
         transactions: TransactionManager,
         clock: ClockPort,
       ) =>
@@ -368,6 +390,7 @@ import { DeletePermissionUseCase } from './application/use-cases/delete-permissi
           invitations,
           users,
           access,
+          audit,
           transactions,
           clock,
         ),
@@ -402,7 +425,9 @@ import { DeletePermissionUseCase } from './application/use-cases/delete-permissi
         InvitationRepository,
         OrganizationRepository,
         RoleRepository,
+        MembershipRepository,
         UserDirectoryPort,
+        AuditLog,
         TransactionManager,
         ClockPort,
       ],
@@ -410,7 +435,9 @@ import { DeletePermissionUseCase } from './application/use-cases/delete-permissi
         invitations: InvitationRepository,
         organizations: OrganizationRepository,
         roles: RoleRepository,
+        memberships: MembershipRepository,
         users: UserDirectoryPort,
+        audit: AuditLog,
         transactions: TransactionManager,
         clock: ClockPort,
       ) =>
@@ -418,19 +445,39 @@ import { DeletePermissionUseCase } from './application/use-cases/delete-permissi
           invitations,
           organizations,
           roles,
+          memberships,
           users,
+          audit,
           transactions,
           clock,
         ),
     },
     {
       provide: DeclineInvitationUseCase,
-      inject: [InvitationRepository, UserDirectoryPort, ClockPort],
+      inject: [
+        InvitationRepository,
+        OrganizationRepository,
+        UserDirectoryPort,
+        AuditLog,
+        TransactionManager,
+        ClockPort,
+      ],
       useFactory: (
         invitations: InvitationRepository,
+        organizations: OrganizationRepository,
         users: UserDirectoryPort,
+        audit: AuditLog,
+        transactions: TransactionManager,
         clock: ClockPort,
-      ) => new DeclineInvitationUseCase(invitations, users, clock),
+      ) =>
+        new DeclineInvitationUseCase(
+          invitations,
+          organizations,
+          users,
+          audit,
+          transactions,
+          clock,
+        ),
     },
     {
       provide: ListOrganizationRolesUseCase,
@@ -468,6 +515,7 @@ import { DeletePermissionUseCase } from './application/use-cases/delete-permissi
         CustomPermissionRepository,
         UserDirectoryPort,
         OrganizationAccessService,
+        AuditLog,
         TransactionManager,
         ClockPort,
       ],
@@ -477,6 +525,7 @@ import { DeletePermissionUseCase } from './application/use-cases/delete-permissi
         customPermissions: CustomPermissionRepository,
         users: UserDirectoryPort,
         access: OrganizationAccessService,
+        audit: AuditLog,
         transactions: TransactionManager,
         clock: ClockPort,
       ) =>
@@ -486,6 +535,7 @@ import { DeletePermissionUseCase } from './application/use-cases/delete-permissi
           customPermissions,
           users,
           access,
+          audit,
           transactions,
           clock,
         ),
@@ -499,6 +549,7 @@ import { DeletePermissionUseCase } from './application/use-cases/delete-permissi
         CustomPermissionRepository,
         UserDirectoryPort,
         OrganizationAccessService,
+        AuditLog,
         TransactionManager,
         ClockPort,
       ],
@@ -509,6 +560,7 @@ import { DeletePermissionUseCase } from './application/use-cases/delete-permissi
         customPermissions: CustomPermissionRepository,
         users: UserDirectoryPort,
         access: OrganizationAccessService,
+        audit: AuditLog,
         transactions: TransactionManager,
         clock: ClockPort,
       ) =>
@@ -519,6 +571,7 @@ import { DeletePermissionUseCase } from './application/use-cases/delete-permissi
           customPermissions,
           users,
           access,
+          audit,
           transactions,
           clock,
         ),
@@ -530,6 +583,7 @@ import { DeletePermissionUseCase } from './application/use-cases/delete-permissi
         RoleRepository,
         UserDirectoryPort,
         OrganizationAccessService,
+        AuditLog,
         TransactionManager,
         ClockPort,
       ],
@@ -538,6 +592,7 @@ import { DeletePermissionUseCase } from './application/use-cases/delete-permissi
         roles: RoleRepository,
         users: UserDirectoryPort,
         access: OrganizationAccessService,
+        audit: AuditLog,
         transactions: TransactionManager,
         clock: ClockPort,
       ) =>
@@ -546,6 +601,7 @@ import { DeletePermissionUseCase } from './application/use-cases/delete-permissi
           roles,
           users,
           access,
+          audit,
           transactions,
           clock,
         ),
@@ -558,6 +614,7 @@ import { DeletePermissionUseCase } from './application/use-cases/delete-permissi
         RoleRepository,
         UserDirectoryPort,
         OrganizationAccessService,
+        AuditLog,
         TransactionManager,
         ClockPort,
       ],
@@ -567,6 +624,7 @@ import { DeletePermissionUseCase } from './application/use-cases/delete-permissi
         roles: RoleRepository,
         users: UserDirectoryPort,
         access: OrganizationAccessService,
+        audit: AuditLog,
         transactions: TransactionManager,
         clock: ClockPort,
       ) =>
@@ -576,6 +634,7 @@ import { DeletePermissionUseCase } from './application/use-cases/delete-permissi
           roles,
           users,
           access,
+          audit,
           transactions,
           clock,
         ),
@@ -617,6 +676,7 @@ import { DeletePermissionUseCase } from './application/use-cases/delete-permissi
         CustomPermissionRepository,
         UserDirectoryPort,
         OrganizationAccessService,
+        AuditLog,
         TransactionManager,
         ClockPort,
       ],
@@ -625,6 +685,7 @@ import { DeletePermissionUseCase } from './application/use-cases/delete-permissi
         customPermissions: CustomPermissionRepository,
         users: UserDirectoryPort,
         access: OrganizationAccessService,
+        audit: AuditLog,
         transactions: TransactionManager,
         clock: ClockPort,
       ) =>
@@ -633,6 +694,7 @@ import { DeletePermissionUseCase } from './application/use-cases/delete-permissi
           customPermissions,
           users,
           access,
+          audit,
           transactions,
           clock,
         ),
@@ -644,6 +706,7 @@ import { DeletePermissionUseCase } from './application/use-cases/delete-permissi
         CustomPermissionRepository,
         UserDirectoryPort,
         OrganizationAccessService,
+        AuditLog,
         TransactionManager,
         ClockPort,
       ],
@@ -652,6 +715,7 @@ import { DeletePermissionUseCase } from './application/use-cases/delete-permissi
         customPermissions: CustomPermissionRepository,
         users: UserDirectoryPort,
         access: OrganizationAccessService,
+        audit: AuditLog,
         transactions: TransactionManager,
         clock: ClockPort,
       ) =>
@@ -660,6 +724,7 @@ import { DeletePermissionUseCase } from './application/use-cases/delete-permissi
           customPermissions,
           users,
           access,
+          audit,
           transactions,
           clock,
         ),
@@ -671,21 +736,27 @@ import { DeletePermissionUseCase } from './application/use-cases/delete-permissi
         CustomPermissionRepository,
         UserDirectoryPort,
         OrganizationAccessService,
+        AuditLog,
         TransactionManager,
+        ClockPort,
       ],
       useFactory: (
         organizations: OrganizationRepository,
         customPermissions: CustomPermissionRepository,
         users: UserDirectoryPort,
         access: OrganizationAccessService,
+        audit: AuditLog,
         transactions: TransactionManager,
+        clock: ClockPort,
       ) =>
         new DeletePermissionUseCase(
           organizations,
           customPermissions,
           users,
           access,
+          audit,
           transactions,
+          clock,
         ),
     },
     {
@@ -709,6 +780,15 @@ import { DeletePermissionUseCase } from './application/use-cases/delete-permissi
           users,
         ),
     },
+    {
+      provide: ListAuditEventsUseCase,
+      inject: [AuditLog, UserDirectoryPort, OrganizationAccessService],
+      useFactory: (
+        audit: AuditLog,
+        users: UserDirectoryPort,
+        access: OrganizationAccessService,
+      ) => new ListAuditEventsUseCase(audit, users, access),
+    },
 
     // Apresentação
     OrganizationsResolver,
@@ -716,6 +796,7 @@ import { DeletePermissionUseCase } from './application/use-cases/delete-permissi
     InvitationsResolver,
     RolesResolver,
     PermissionsResolver,
+    AuditResolver,
   ],
 })
 export class OrganizationsModule {}

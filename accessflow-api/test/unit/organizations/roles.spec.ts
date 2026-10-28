@@ -38,6 +38,7 @@ import { CustomPermission } from '@/modules/organizations/domain/entities/custom
 import { FakeUserDirectory } from '@test/fakes/organizations/fake-user-directory';
 import { FakeTransactionManager } from '@test/fakes/shared/fake-transaction-manager';
 import { FixedClock } from '@test/fakes/shared/fixed-clock';
+import { InMemoryAuditLog } from '@test/in-memory/organizations/in-memory-audit-log';
 
 const START = new Date('2026-03-01T12:00:00.000Z');
 const LATER = new Date('2026-03-02T12:00:00.000Z');
@@ -164,6 +165,7 @@ describe('Gestão de papéis', () => {
       customPermissions,
       users,
       access,
+      new InMemoryAuditLog(),
       transactions,
       clock,
     );
@@ -174,6 +176,7 @@ describe('Gestão de papéis', () => {
       customPermissions,
       users,
       access,
+      new InMemoryAuditLog(),
       transactions,
       clock,
     );
@@ -182,6 +185,7 @@ describe('Gestão de papéis', () => {
       roles,
       users,
       access,
+      new InMemoryAuditLog(),
       transactions,
       clock,
     );
@@ -191,6 +195,7 @@ describe('Gestão de papéis', () => {
       roles,
       users,
       access,
+      new InMemoryAuditLog(),
       transactions,
       clock,
     );

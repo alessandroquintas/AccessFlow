@@ -46,6 +46,7 @@ import { InMemoryInvitationRepository } from '@test/in-memory/organizations/in-m
 import { FakeUserDirectory } from '@test/fakes/organizations/fake-user-directory';
 import { FixedClock } from '@test/fakes/shared/fixed-clock';
 import { FakeTransactionManager } from '@test/fakes/shared/fake-transaction-manager';
+import { InMemoryAuditLog } from '@test/in-memory/organizations/in-memory-audit-log';
 
 const DAY = 24 * 60 * 60 * 1000;
 const START = new Date('2026-03-01T12:00:00.000Z');
@@ -196,6 +197,7 @@ describe('Convites', () => {
       roles,
       users,
       access,
+      new InMemoryAuditLog(),
       transactions,
       clock,
     );
@@ -210,6 +212,7 @@ describe('Convites', () => {
       invitations,
       users,
       access,
+      new InMemoryAuditLog(),
       transactions,
       clock,
     );
@@ -224,11 +227,20 @@ describe('Convites', () => {
       invitations,
       organizations,
       roles,
+      memberships,
       users,
+      new InMemoryAuditLog(),
       transactions,
       clock,
     );
-    declineInvitation = new DeclineInvitationUseCase(invitations, users, clock);
+    declineInvitation = new DeclineInvitationUseCase(
+      invitations,
+      organizations,
+      users,
+      new InMemoryAuditLog(),
+      transactions,
+      clock,
+    );
 
     acme = createOrganization('acme');
     addMember(acme, OWNER.id, RoleSystemKey.OWNER);

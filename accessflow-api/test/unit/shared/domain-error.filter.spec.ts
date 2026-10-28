@@ -34,6 +34,7 @@ import { PermissionLimitReachedError } from '@/modules/organizations/domain/erro
 import { PermissionInUseError } from '@/modules/organizations/domain/errors/permission-in-use.error';
 import { PermissionNotFoundError } from '@/modules/organizations/domain/errors/permission-not-found.error';
 import { InvalidAuthorizationRequestError } from '@/modules/organizations/application/errors/invalid-authorization-request.error';
+import { InvalidAuditFilterError } from '@/modules/organizations/application/errors/invalid-audit-filter.error';
 
 const response = { tipo: 'resposta-http' };
 
@@ -104,6 +105,7 @@ describe('DomainErrorFilter', () => {
       [new PermissionInUseError(), 'CONFLICT'],
       [new PermissionNotFoundError(), 'NOT_FOUND'],
       [new InvalidAuthorizationRequestError('corpo'), 'BAD_REQUEST'],
+      [new InvalidAuditFilterError('filtro'), 'BAD_REQUEST'],
     ])('traduz %s para %s', (error, code) => {
       const result = sut.catch(error, graphqlHost()) as GraphQLError;
 

@@ -34,6 +34,7 @@ import {
   SeededOrganization,
   seedOrganization,
 } from '@test/factory/organizations/seed-organization';
+import { PrismaAuditLogRepository } from '@/modules/organizations/infrastructure/persistence/prisma-audit-log.repository';
 
 const DAY = 24 * 60 * 60 * 1000;
 const NOW = new Date('2026-03-01T12:00:00.000Z');
@@ -642,7 +643,9 @@ describe('PrismaInvitationRepository (integração)', () => {
         invitations,
         organizations,
         new PrismaRoleRepository(clients, transactions),
+        memberships,
         users,
+        new PrismaAuditLogRepository(clients),
         transactions,
         new FixedClock(at(DAY)),
       );

@@ -8,6 +8,12 @@ import { MemberNotFoundError } from '../../domain/errors/member-not-found.error'
 import { OrganizationPermission } from '../../policies/organization-permission';
 import { UserDirectoryPort } from '../ports/user-directory.port';
 import { OrganizationAccessService } from '../services/organization-access.service';
+import {
+  AuditAction,
+  AuditEvent,
+  userActor,
+} from '../../domain/entities/audit-event.entity';
+import { AuditLog } from '../../domain/repositories/audit-log.repository';
 
 export interface RemoveMemberInput {
   cognitoSub: string;
@@ -21,6 +27,7 @@ export class RemoveMemberUseCase {
     private readonly memberships: MembershipRepository,
     private readonly users: UserDirectoryPort,
     private readonly access: OrganizationAccessService,
+    private readonly audit: AuditLog,
     private readonly transactions: TransactionManager,
     private readonly clock: ClockPort,
   ) {}
@@ -32,7 +39,7 @@ export class RemoveMemberUseCase {
       // Trava antes de checar a permissão do autor: se ele for removido ou
       // perder o papel ao mesmo tempo, uma das duas escritas espera a outra.
       await this.organizations.lock(input.organizationId);
-      await this.access.requirePermission(
+      const { organization } = await this.access.requirePermission(
         input.organizationId,
         actorId,
         OrganizationPermission.MEMBERS_REMOVE,
@@ -58,7 +65,20 @@ export class RemoveMemberUseCase {
         throw new MemberNotFoundError();
       }
 
-      await this.memberships.remove(target, this.clock.now());
+      const now = this.clock.now();
+      await this.memberships.remove(target, now);
+      await this.audit.record(
+        AuditEvent.create(
+          {
+            organizationId: organization.id,
+            actor: userActor(actorId),
+            action: AuditAction.MEMBER_REMOVED,
+            targetId: target.userId,
+            details: { roleId: target.roleId },
+          },
+          now,
+        ),
+      );
     });
   }
 }

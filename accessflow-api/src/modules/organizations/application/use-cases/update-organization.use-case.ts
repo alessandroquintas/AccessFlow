@@ -5,6 +5,12 @@ import { OrganizationPermission } from '../../policies/organization-permission';
 import { OrganizationWithMembership } from '../dto/organization-with-membership';
 import { UserDirectoryPort } from '../ports/user-directory.port';
 import { OrganizationAccessService } from '../services/organization-access.service';
+import {
+  AuditAction,
+  AuditEvent,
+  userActor,
+} from '../../domain/entities/audit-event.entity';
+import { AuditLog } from '../../domain/repositories/audit-log.repository';
 
 export interface UpdateOrganizationInput {
   cognitoSub: string;
@@ -17,6 +23,7 @@ export class UpdateOrganizationUseCase {
     private readonly organizations: OrganizationRepository,
     private readonly users: UserDirectoryPort,
     private readonly access: OrganizationAccessService,
+    private readonly audit: AuditLog,
     private readonly transactions: TransactionManager,
     private readonly clock: ClockPort,
   ) {}
@@ -36,8 +43,29 @@ export class UpdateOrganizationUseCase {
         OrganizationPermission.ORGANIZATIONS_UPDATE,
       );
 
-      context.organization.rename(input.name, this.clock.now());
-      await this.organizations.save(context.organization);
+      const { organization } = context;
+      const previous = organization.name;
+      const now = this.clock.now();
+      organization.rename(input.name, now);
+
+      // O mesmo nome não é mudança: nada é gravado.
+      if (organization.name !== previous) {
+        await this.organizations.save(organization);
+        await this.audit.record(
+          AuditEvent.create(
+            {
+              organizationId: organization.id,
+              actor: userActor(userId),
+              action: AuditAction.ORGANIZATION_UPDATED,
+              targetId: organization.id,
+              details: {
+                changes: { name: { from: previous, to: organization.name } },
+              },
+            },
+            now,
+          ),
+        );
+      }
 
       return context;
     });

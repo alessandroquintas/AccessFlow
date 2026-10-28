@@ -51,6 +51,7 @@ model Organization {
   invitations        Invitation[]
   roles              Role[]
   customPermissions  CustomPermission[]
+  auditEvents        AuditEvent[]
 
   @@map("organizations")
 }
@@ -176,8 +177,38 @@ model User {
   updatedAt       DateTime     @updatedAt @map("updated_at") @db.Timestamptz(3)
   memberships     Membership[]
   invitationsSent Invitation[]
+  auditEvents     AuditEvent[]
 
   // inviteMember (ALREADY_MEMBER) e myInvitations buscam por e-mail.
   @@index([email])
   @@map("users")
+}
+
+enum AuditActorType {
+  USER
+  MACHINE
+  SYSTEM
+}
+
+// Trilha de auditoria administrativa: só INSERT. O trigger que recusa UPDATE e
+// DELETE e o CHECK de coerência do ator estão na migration (o Prisma não os
+// representa). action e target_type são texto, validados no código.
+model AuditEvent {
+  id             String         @id @default(uuid()) @db.Uuid
+  organizationId String         @map("organization_id") @db.Uuid
+  actorType      AuditActorType @map("actor_type")
+  actorUserId    String?        @map("actor_user_id") @db.Uuid
+  actorClientId  String?        @map("actor_client_id")
+  action         String
+  targetType     String         @map("target_type")
+  targetId       String         @map("target_id")
+  details        Json
+  occurredAt     DateTime       @map("occurred_at") @db.Timestamptz(3)
+
+  organization Organization @relation(fields: [organizationId], references: [id], onDelete: Restrict)
+  actorUser    User?        @relation(fields: [actorUserId], references: [id], onDelete: Restrict)
+
+  // Listagem da organização, do mais recente para o mais antigo.
+  @@index([organizationId, occurredAt(sort: Desc), id(sort: Desc)])
+  @@map("audit_events")
 }

@@ -8,6 +8,12 @@ import { OrganizationRepository } from '../../domain/repositories/organization.r
 import { RoleRepository } from '../../domain/repositories/role.repository';
 import { OrganizationWithMembership } from '../dto/organization-with-membership';
 import { UserDirectoryPort } from '../ports/user-directory.port';
+import {
+  AuditAction,
+  AuditEvent,
+  userActor,
+} from '../../domain/entities/audit-event.entity';
+import { AuditLog } from '../../domain/repositories/audit-log.repository';
 
 export interface CreateOrganizationInput {
   cognitoSub: string;
@@ -21,6 +27,7 @@ export class CreateOrganizationUseCase {
     private readonly roles: RoleRepository,
     private readonly memberships: MembershipRepository,
     private readonly users: UserDirectoryPort,
+    private readonly audit: AuditLog,
     private readonly transactions: TransactionManager,
     private readonly clock: ClockPort,
   ) {}
@@ -42,11 +49,23 @@ export class CreateOrganizationUseCase {
       now,
     );
 
-    // A ordem segue as FKs: organização, papéis e então o membership.
+    // A ordem segue as FKs: organização, papéis, o membership e o evento.
     await this.transactions.run(async () => {
       await this.organizations.create(organization);
       await this.roles.createDefaults(roles);
       await this.memberships.create(owner);
+      await this.audit.record(
+        AuditEvent.create(
+          {
+            organizationId: organization.id,
+            actor: userActor(userId),
+            action: AuditAction.ORGANIZATION_CREATED,
+            targetId: organization.id,
+            details: { name: organization.name, slug: organization.slug },
+          },
+          now,
+        ),
+      );
     });
 
     return { organization, membership: owner, role: roles.owner };

@@ -7,6 +7,12 @@ import { OrganizationPermissionEntry } from '../dto/organization-permission-entr
 import { UserDirectoryPort } from '../ports/user-directory.port';
 import { OrganizationAccessService } from '../services/organization-access.service';
 import { requireCustomPermission } from '../services/require-custom-permission';
+import {
+  AuditAction,
+  AuditEvent,
+  userActor,
+} from '../../domain/entities/audit-event.entity';
+import { AuditLog } from '../../domain/repositories/audit-log.repository';
 
 export interface UpdatePermissionInput {
   cognitoSub: string;
@@ -22,6 +28,7 @@ export class UpdatePermissionUseCase {
     private readonly customPermissions: CustomPermissionRepository,
     private readonly users: UserDirectoryPort,
     private readonly access: OrganizationAccessService,
+    private readonly audit: AuditLog,
     private readonly transactions: TransactionManager,
     private readonly clock: ClockPort,
   ) {}
@@ -46,9 +53,30 @@ export class UpdatePermissionUseCase {
         organizationId,
         input.key,
       );
-      permission.changeDescription(input.description, this.clock.now());
+      const previous = permission.description;
+      const now = this.clock.now();
+      permission.changeDescription(input.description, now);
 
       await this.customPermissions.save(permission);
+      // A mesma descrição, depois de normalizada, não é mudança.
+      if (permission.description !== previous) {
+        await this.audit.record(
+          AuditEvent.create(
+            {
+              organizationId,
+              actor: userActor(actorId),
+              action: AuditAction.PERMISSION_UPDATED,
+              targetId: permission.key,
+              details: {
+                changes: {
+                  description: { from: previous, to: permission.description },
+                },
+              },
+            },
+            now,
+          ),
+        );
+      }
       return permission;
     });
 

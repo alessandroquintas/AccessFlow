@@ -9,6 +9,70 @@ input AssignRoleInput {
   userId: ID!
 }
 
+type AuditActor {
+  """client_id da integração, quando MACHINE."""
+  clientId: String
+
+  """Nome atual do usuário; nulo se o perfil não for encontrado."""
+  name: String
+  type: AuditActorType!
+
+  """Preenchido quando USER."""
+  userId: ID
+}
+
+"""Na Fase 9a só USER é emitido."""
+enum AuditActorType {
+  MACHINE
+  SYSTEM
+  USER
+}
+
+type AuditEvent {
+  """Ex.: role.created, member.role_changed."""
+  action: String!
+  actor: AuditActor!
+
+  """
+  Detalhes da ação como JSON serializado (um objeto). O formato depende da ação; sem e-mail nem nome de pessoa.
+  """
+  details: String!
+  id: ID!
+  occurredAt: DateTime!
+  target: AuditTarget!
+}
+
+type AuditEventConnection {
+  nodes: [AuditEvent!]!
+  pageInfo: PageInfo!
+}
+
+input AuditEventFilter {
+  """
+  Qualquer uma destas ações. Ação fora do catálogo responde BAD_REQUEST; lista vazia não filtra.
+  """
+  actions: [String!]
+  actorUserId: ID
+
+  """Inclusive. Depois de occurredTo responde BAD_REQUEST."""
+  occurredFrom: DateTime
+
+  """Inclusive."""
+  occurredTo: DateTime
+  targetId: ID
+
+  """organization, member, invitation, role ou permission."""
+  targetType: String
+}
+
+type AuditTarget {
+  """Id do alvo: o userId para member e a chave para permission."""
+  id: ID!
+
+  """organization, member, invitation, role ou permission."""
+  type: String!
+}
+
 input CreateOrganizationInput {
   """Nome de exibição (2 a 100 caracteres)."""
   name: String!
@@ -275,6 +339,11 @@ input ProvisionMeInput {
 }
 
 type Query {
+  """
+  Trilha de auditoria da organização, do mais recente para o mais antigo. Exige audit:read.
+  """
+  auditEvents(after: String, filter: AuditEventFilter, first: Int, organizationId: ID!): AuditEventConnection!
+
   """Perfil do usuário autenticado."""
   me: User!
 

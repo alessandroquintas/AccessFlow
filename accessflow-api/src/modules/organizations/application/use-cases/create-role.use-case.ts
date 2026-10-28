@@ -12,6 +12,12 @@ import { UserDirectoryPort } from '../ports/user-directory.port';
 import { ensureRoleNameAvailable } from '../services/ensure-role-name-available';
 import { loadPermissionCatalog } from '../services/load-permission-catalog';
 import { OrganizationAccessService } from '../services/organization-access.service';
+import {
+  AuditAction,
+  AuditEvent,
+  userActor,
+} from '../../domain/entities/audit-event.entity';
+import { AuditLog } from '../../domain/repositories/audit-log.repository';
 
 export interface CreateRoleInput {
   cognitoSub: string;
@@ -27,6 +33,7 @@ export class CreateRoleUseCase {
     private readonly customPermissions: CustomPermissionRepository,
     private readonly users: UserDirectoryPort,
     private readonly access: OrganizationAccessService,
+    private readonly audit: AuditLog,
     private readonly transactions: TransactionManager,
     private readonly clock: ClockPort,
   ) {}
@@ -46,6 +53,7 @@ export class CreateRoleUseCase {
         OrganizationPermission.ROLES_MANAGE,
       );
 
+      const now = this.clock.now();
       const role = Role.create(
         {
           organizationId,
@@ -53,7 +61,7 @@ export class CreateRoleUseCase {
           permissions: input.permissions,
         },
         await loadPermissionCatalog(this.customPermissions, organizationId),
-        this.clock.now(),
+        now,
       );
       ensureCanCreateRole(actorRole, role.permissions);
 
@@ -66,6 +74,18 @@ export class CreateRoleUseCase {
       }
 
       await this.roles.create(role);
+      await this.audit.record(
+        AuditEvent.create(
+          {
+            organizationId,
+            actor: userActor(actorId),
+            action: AuditAction.ROLE_CREATED,
+            targetId: role.id,
+            details: { name: role.name, permissions: [...role.permissions] },
+          },
+          now,
+        ),
+      );
       return role;
     });
 

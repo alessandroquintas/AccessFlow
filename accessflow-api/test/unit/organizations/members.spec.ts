@@ -20,6 +20,7 @@ import { InMemoryRoleRepository } from '@test/in-memory/organizations/in-memory-
 import { FakeUserDirectory } from '@test/fakes/organizations/fake-user-directory';
 import { FakeTransactionManager } from '@test/fakes/shared/fake-transaction-manager';
 import { FixedClock } from '@test/fakes/shared/fixed-clock';
+import { InMemoryAuditLog } from '@test/in-memory/organizations/in-memory-audit-log';
 
 const OWNER = { sub: 'sub-owner', id: '11111111-1111-4111-8111-111111111111' };
 const MEMBER = {
@@ -97,6 +98,7 @@ describe('Membros da organização', () => {
       memberships,
       users,
       access,
+      new InMemoryAuditLog(),
       new FakeTransactionManager(),
       clock,
     );
@@ -105,6 +107,7 @@ describe('Membros da organização', () => {
       memberships,
       users,
       access,
+      new InMemoryAuditLog(),
       new FakeTransactionManager(),
       clock,
     );

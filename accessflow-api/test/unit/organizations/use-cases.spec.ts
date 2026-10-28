@@ -14,6 +14,7 @@ import { FakeUserDirectory } from '@test/fakes/organizations/fake-user-directory
 import { FakeTransactionManager } from '@test/fakes/shared/fake-transaction-manager';
 import { FixedClock } from '@test/fakes/shared/fixed-clock';
 import { CreateOrganizationUseCase } from '@/modules/organizations/application/use-cases/create-organization.use-case';
+import { InMemoryAuditLog } from '@test/in-memory/organizations/in-memory-audit-log';
 
 const ANA = { sub: 'sub-ana', id: '11111111-1111-4111-8111-111111111111' };
 const BRUNO = { sub: 'sub-bruno', id: '22222222-2222-4222-8222-222222222222' };
@@ -45,6 +46,7 @@ describe('Casos de uso de organizations', () => {
       roles,
       memberships,
       users,
+      new InMemoryAuditLog(),
       new FakeTransactionManager(),
       new FixedClock(),
     );

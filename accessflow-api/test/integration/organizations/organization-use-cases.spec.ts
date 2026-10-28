@@ -28,6 +28,10 @@ import { CreateOrganizationUseCase } from '@/modules/organizations/application/u
 import { InviteMemberUseCase } from '@/modules/organizations/application/use-cases/invite-member.use-case';
 import { AcceptInvitationUseCase } from '@/modules/organizations/application/use-cases/accept-invitation.use-case';
 import { RevokeInvitationUseCase } from '@/modules/organizations/application/use-cases/revoke-invitation.use-case';
+import { DeclineInvitationUseCase } from '@/modules/organizations/application/use-cases/decline-invitation.use-case';
+import { UpdateOrganizationUseCase } from '@/modules/organizations/application/use-cases/update-organization.use-case';
+import { AuditEvent } from '@/modules/organizations/domain/entities/audit-event.entity';
+import { AuditLog } from '@/modules/organizations/domain/repositories/audit-log.repository';
 import { InvitationNotFoundError } from '@/modules/organizations/domain/errors/invitation-not-found.error';
 import { CreateRoleUseCase } from '@/modules/organizations/application/use-cases/create-role.use-case';
 import { UpdateRoleUseCase } from '@/modules/organizations/application/use-cases/update-role.use-case';
@@ -48,6 +52,7 @@ import {
   seedOrganization,
   seedRole,
 } from '@test/factory/organizations/seed-organization';
+import { PrismaAuditLogRepository } from '@/modules/organizations/infrastructure/persistence/prisma-audit-log.repository';
 
 let prisma: PrismaService;
 let users: FakeUserDirectory;
@@ -62,6 +67,17 @@ let deleteRole: DeleteRoleUseCase;
 let assignRole: AssignRoleUseCase;
 let createPermission: CreatePermissionUseCase;
 let deletePermission: DeletePermissionUseCase;
+let declineInvitation: DeclineInvitationUseCase;
+/** Dependências reais, para montar casos de uso com uma trilha que falha. */
+let deps: {
+  clients: PrismaClientProvider;
+  transactions: PrismaTransactionManager;
+  memberships: PrismaMembershipRepository;
+  roles: PrismaRoleRepository;
+  customPermissions: PrismaCustomPermissionRepository;
+  access: OrganizationAccessService;
+  clock: FixedClock;
+};
 
 async function createUser(cognitoSub: string) {
   const user = await prisma.user.create({
@@ -162,12 +178,30 @@ describe('Casos de uso de organizations com Prisma (integração)', () => {
       memberships,
       roles,
     );
+    deps = {
+      clients,
+      transactions,
+      memberships,
+      roles,
+      customPermissions,
+      access,
+      clock,
+    };
+    declineInvitation = new DeclineInvitationUseCase(
+      invitations,
+      organizations,
+      users,
+      new PrismaAuditLogRepository(clients),
+      transactions,
+      clock,
+    );
 
     createOrganization = new CreateOrganizationUseCase(
       organizations,
       roles,
       memberships,
       users,
+      new PrismaAuditLogRepository(clients),
       transactions,
       clock,
     );
@@ -178,6 +212,7 @@ describe('Casos de uso de organizations com Prisma (integração)', () => {
       roles,
       users,
       access,
+      new PrismaAuditLogRepository(clients),
       transactions,
       clock,
     );
@@ -185,7 +220,9 @@ describe('Casos de uso de organizations com Prisma (integração)', () => {
       invitations,
       organizations,
       roles,
+      memberships,
       users,
+      new PrismaAuditLogRepository(clients),
       transactions,
       clock,
     );
@@ -194,6 +231,7 @@ describe('Casos de uso de organizations com Prisma (integração)', () => {
       invitations,
       users,
       access,
+      new PrismaAuditLogRepository(clients),
       transactions,
       clock,
     );
@@ -203,6 +241,7 @@ describe('Casos de uso de organizations com Prisma (integração)', () => {
       customPermissions,
       users,
       access,
+      new PrismaAuditLogRepository(clients),
       transactions,
       clock,
     );
@@ -213,6 +252,7 @@ describe('Casos de uso de organizations com Prisma (integração)', () => {
       customPermissions,
       users,
       access,
+      new PrismaAuditLogRepository(clients),
       transactions,
       clock,
     );
@@ -221,6 +261,7 @@ describe('Casos de uso de organizations com Prisma (integração)', () => {
       roles,
       users,
       access,
+      new PrismaAuditLogRepository(clients),
       transactions,
       clock,
     );
@@ -230,6 +271,7 @@ describe('Casos de uso de organizations com Prisma (integração)', () => {
       roles,
       users,
       access,
+      new PrismaAuditLogRepository(clients),
       transactions,
       clock,
     );
@@ -238,6 +280,7 @@ describe('Casos de uso de organizations com Prisma (integração)', () => {
       customPermissions,
       users,
       access,
+      new PrismaAuditLogRepository(clients),
       transactions,
       clock,
     );
@@ -246,7 +289,9 @@ describe('Casos de uso de organizations com Prisma (integração)', () => {
       customPermissions,
       users,
       access,
+      new PrismaAuditLogRepository(clients),
       transactions,
+      clock,
     );
   });
 
@@ -1013,6 +1058,324 @@ describe('Casos de uso de organizations com Prisma (integração)', () => {
         failure instanceof PermissionInUseError ||
           failure instanceof InvalidPermissionError,
       ).toBe(true);
+    });
+  });
+
+  describe('trilha de auditoria com Prisma', () => {
+    let acme: SeededOrganization;
+    let ana: { id: string };
+    let bruno: { id: string };
+
+    beforeEach(async () => {
+      ana = await createUser('sub-ana');
+      bruno = await createUser('sub-bruno');
+      acme = await seedOrganization(prisma, {
+        slug: 'acme',
+        owner: ana.id,
+        members: [{ userId: bruno.id }],
+      });
+    });
+
+    /** Trilha que falha ao gravar, ou que grava de verdade e falha depois. */
+    class ForcedFailureAuditLog extends AuditLog {
+      written = 0;
+
+      constructor(private readonly when: 'instead' | 'after') {
+        super();
+      }
+
+      async record(event: AuditEvent): Promise<void> {
+        if (this.when === 'after') {
+          await new PrismaAuditLogRepository(deps.clients).record(event);
+          this.written++;
+        }
+        throw new Error(`falha forçada (${this.when})`);
+      }
+
+      listByOrganization(): never {
+        throw new Error('não usado');
+      }
+    }
+
+    function createRoleWith(audit: AuditLog) {
+      return new CreateRoleUseCase(
+        organizations,
+        deps.roles,
+        deps.customPermissions,
+        users,
+        deps.access,
+        audit,
+        deps.transactions,
+        deps.clock,
+      );
+    }
+
+    function assignRoleWith(audit: AuditLog) {
+      return new AssignRoleUseCase(
+        organizations,
+        deps.memberships,
+        deps.roles,
+        users,
+        deps.access,
+        audit,
+        deps.transactions,
+        deps.clock,
+      );
+    }
+
+    const customRoles = () =>
+      prisma.role.count({
+        where: { organizationId: acme.id, systemKey: null },
+      });
+
+    it('a: falha forçada na gravação do evento desfaz a ação', async () => {
+      const audit = new ForcedFailureAuditLog('instead');
+      const finance = await seedRole(prisma, {
+        organizationId: acme.id,
+        name: 'Financeiro',
+      });
+
+      await expect(
+        createRoleWith(audit).execute({
+          cognitoSub: 'sub-ana',
+          organizationId: acme.id,
+          name: 'Contas',
+          permissions: [],
+        }),
+      ).rejects.toThrow('falha forçada (instead)');
+      await expect(
+        assignRoleWith(audit).execute({
+          cognitoSub: 'sub-ana',
+          organizationId: acme.id,
+          userId: bruno.id,
+          roleId: finance,
+        }),
+      ).rejects.toThrow('falha forçada (instead)');
+
+      expect(await customRoles()).toBe(1);
+      expect(
+        (
+          await prisma.membership.findFirstOrThrow({
+            where: { userId: bruno.id },
+          })
+        ).roleId,
+      ).toBe(acme.roleIds.MEMBER);
+      expect(await prisma.auditEvent.count()).toBe(0);
+    });
+
+    it('b: falha forçada depois do evento desfaz o evento (e a ação)', async () => {
+      const audit = new ForcedFailureAuditLog('after');
+
+      await expect(
+        createRoleWith(audit).execute({
+          cognitoSub: 'sub-ana',
+          organizationId: acme.id,
+          name: 'Contas',
+          permissions: [],
+        }),
+      ).rejects.toThrow('falha forçada (after)');
+
+      expect(audit.written).toBe(1);
+      expect(await prisma.auditEvent.count()).toBe(0);
+      expect(await customRoles()).toBe(0);
+    });
+
+    it('c: dois OWNERs se rebaixando ao mesmo tempo geram exatamente um evento', async () => {
+      const brunoOwner = await prisma.membership.update({
+        where: {
+          organizationId_userId: { organizationId: acme.id, userId: bruno.id },
+        },
+        data: { roleId: acme.roleIds.OWNER },
+      });
+      const anaOwner = await prisma.membership.findFirstOrThrow({
+        where: { organizationId: acme.id, userId: ana.id },
+      });
+      await warmPool(8);
+      const demote = (cognitoSub: string, userId: string) =>
+        settle(
+          assignRole.execute({
+            cognitoSub,
+            organizationId: acme.id,
+            userId,
+            roleId: acme.roleIds.MEMBER,
+          }),
+        );
+      let anaDemotesBruno!: Promise<PromiseSettledResult<unknown>>;
+      let brunoDemotesAna!: Promise<PromiseSettledResult<unknown>>;
+
+      // Mesmo desenho da prova D da 8b: as duas leem e esbarram em T0.
+      await prisma.$transaction(async (tx) => {
+        await tx.$queryRaw`SELECT id FROM memberships WHERE id IN (${anaOwner.id}::uuid, ${brunoOwner.id}::uuid) FOR UPDATE`;
+        anaDemotesBruno = demote('sub-ana', bruno.id);
+        brunoDemotesAna = demote('sub-bruno', ana.id);
+        await waitForLockWaiters(2);
+      });
+
+      const results = [await anaDemotesBruno, await brunoDemotesAna];
+      expect(results.filter((r) => r.status === 'fulfilled')).toHaveLength(1);
+
+      const events = await prisma.auditEvent.findMany();
+      expect(events).toHaveLength(1);
+      const [event] = events;
+      const winner = results[0].status === 'fulfilled' ? ana : bruno;
+      const loser = winner === ana ? bruno : ana;
+      expect(event).toMatchObject({
+        action: 'member.role_changed',
+        actorUserId: winner.id,
+        targetType: 'member',
+        targetId: loser.id,
+        details: {
+          fromRoleId: acme.roleIds.OWNER,
+          toRoleId: acme.roleIds.MEMBER,
+        },
+      });
+    });
+
+    describe('declineInvitation: só o destinatário trava a organização', () => {
+      let invitationId: string;
+
+      beforeEach(async () => {
+        await createUser('sub-carla');
+        ({ id: invitationId } = await prisma.invitation.create({
+          data: {
+            organizationId: acme.id,
+            email: 'sub-carla@example.com',
+            roleId: acme.roleIds.MEMBER,
+            invitedByUserId: ana.id,
+            expiresAt: new Date('2026-03-08T12:00:00.000Z'),
+          },
+        }));
+        await warmPool();
+      });
+
+      afterEach(() => {
+        vi.restoreAllMocks();
+      });
+
+      function declineWithin(cognitoSub: string, id: string, ms = 1000) {
+        return Promise.race([
+          settle(declineInvitation.execute({ cognitoSub, invitationId: id })),
+          new Promise<'bloqueou'>((resolve) =>
+            setTimeout(() => resolve('bloqueou'), ms),
+          ),
+        ]);
+      }
+
+      it('não destinatário, convite inexistente ou id malformado: NOT_FOUND sem travar a organização', async () => {
+        const lock = vi.spyOn(organizations, 'lock');
+
+        await prisma.$transaction(async (tx) => {
+          await tx.$queryRaw`SELECT id FROM organizations WHERE id = ${acme.id}::uuid FOR UPDATE`;
+
+          for (const [cognitoSub, id] of [
+            ['sub-bruno', invitationId],
+            ['sub-carla', crypto.randomUUID()],
+            ['sub-carla', 'nao-e-uuid'],
+          ]) {
+            const outcome = await declineWithin(cognitoSub, id);
+            expect(outcome).not.toBe('bloqueou');
+            expect(
+              reasonOf(outcome as PromiseSettledResult<unknown>),
+            ).toBeInstanceOf(InvitationNotFoundError);
+          }
+          expect(await lockWaiters()).toBe(0);
+        });
+
+        expect(lock).not.toHaveBeenCalled();
+        expect(await prisma.auditEvent.count()).toBe(0);
+      });
+
+      it('controle: o decline do destinatário espera a trava da organização e grava o evento', async () => {
+        let declined!: Promise<PromiseSettledResult<unknown>>;
+
+        await prisma.$transaction(async (tx) => {
+          await tx.$queryRaw`SELECT id FROM organizations WHERE id = ${acme.id}::uuid FOR UPDATE`;
+          declined = settle(
+            declineInvitation.execute({
+              cognitoSub: 'sub-carla',
+              invitationId,
+            }),
+          );
+          await waitForLockWaiters(1);
+        });
+
+        expect((await declined).status).toBe('fulfilled');
+        expect(
+          await prisma.auditEvent.findMany({
+            select: { action: true, targetId: true },
+          }),
+        ).toEqual([{ action: 'invitation.declined', targetId: invitationId }]);
+      });
+    });
+
+    it('fluxo administrativo grava um evento por mudança, sem e-mail em nenhum details', async () => {
+      await createUser('sub-carla');
+      await createUser('sub-davi');
+      const { organization } = await createOrganization.execute({
+        cognitoSub: 'sub-ana',
+        name: 'Beta',
+        slug: 'beta',
+      });
+      const orgId = organization.id;
+      const updateOrganization = new UpdateOrganizationUseCase(
+        organizations,
+        users,
+        deps.access,
+        new PrismaAuditLogRepository(deps.clients),
+        deps.transactions,
+        deps.clock,
+      );
+      await updateOrganization.execute({
+        cognitoSub: 'sub-ana',
+        organizationId: orgId,
+        name: 'Beta SA',
+      });
+      const { role } = await createRole.execute({
+        cognitoSub: 'sub-ana',
+        organizationId: orgId,
+        name: 'Financeiro',
+        permissions: ['members:read'],
+      });
+      const { invitation } = await inviteMember.execute({
+        cognitoSub: 'sub-ana',
+        organizationId: orgId,
+        email: 'sub-carla@example.com',
+        roleId: role.id,
+      });
+      await acceptInvitation.execute({
+        cognitoSub: 'sub-carla',
+        invitationId: invitation.id,
+      });
+      const { invitation: second } = await inviteMember.execute({
+        cognitoSub: 'sub-ana',
+        organizationId: orgId,
+        email: 'sub-davi@example.com',
+        role: RoleSystemKey.MEMBER,
+      });
+      await declineInvitation.execute({
+        cognitoSub: 'sub-davi',
+        invitationId: second.id,
+      });
+
+      const events = await prisma.auditEvent.findMany({
+        where: { organizationId: orgId },
+        orderBy: [{ occurredAt: 'asc' }, { action: 'asc' }],
+      });
+      expect(events.map((e) => e.action).sort()).toEqual(
+        [
+          'invitation.accepted',
+          'invitation.created',
+          'invitation.created',
+          'invitation.declined',
+          'organization.created',
+          'organization.updated',
+          'role.created',
+        ].sort(),
+      );
+      const [{ withEmail }] = await prisma.$queryRaw<{ withEmail: number }[]>`
+        SELECT count(*)::int AS "withEmail" FROM audit_events
+        WHERE details::text LIKE '%@%'`;
+      expect(withEmail).toBe(0);
     });
   });
 });

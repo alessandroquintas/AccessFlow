@@ -15,6 +15,16 @@ export abstract class InvitationRepository {
   abstract findById(id: string): Promise<Invitation | null>;
 
   /**
+   * O convite PENDING (expirado ou não) da organização para o e-mail: o que
+   * o savePending renovaria. Com a organização travada, a leitura vale até o
+   * savePending da mesma transação.
+   */
+  abstract findPending(
+    organizationId: string,
+    email: string,
+  ): Promise<Invitation | null>;
+
+  /**
    * Grava um convite PENDING, numa transação travada na organização:
    * - se já existe PENDING (mesmo expirado) para o mesmo (organização,
    *   e-mail), renova esse convite em `now` com o papel e o autor do

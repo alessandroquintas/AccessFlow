@@ -9,6 +9,12 @@ import { OrganizationPermission } from '../../policies/organization-permission';
 import { OrganizationPermissionEntry } from '../dto/organization-permission-entry';
 import { UserDirectoryPort } from '../ports/user-directory.port';
 import { OrganizationAccessService } from '../services/organization-access.service';
+import {
+  AuditAction,
+  AuditEvent,
+  userActor,
+} from '../../domain/entities/audit-event.entity';
+import { AuditLog } from '../../domain/repositories/audit-log.repository';
 
 export interface CreatePermissionInput {
   cognitoSub: string;
@@ -23,6 +29,7 @@ export class CreatePermissionUseCase {
     private readonly customPermissions: CustomPermissionRepository,
     private readonly users: UserDirectoryPort,
     private readonly access: OrganizationAccessService,
+    private readonly audit: AuditLog,
     private readonly transactions: TransactionManager,
     private readonly clock: ClockPort,
   ) {}
@@ -44,9 +51,10 @@ export class CreatePermissionUseCase {
         OrganizationPermission.PERMISSIONS_MANAGE,
       );
 
+      const now = this.clock.now();
       const permission = CustomPermission.create(
         { organizationId, key: input.key, description: input.description },
-        this.clock.now(),
+        now,
       );
 
       const existing =
@@ -59,6 +67,21 @@ export class CreatePermissionUseCase {
       }
 
       await this.customPermissions.create(permission);
+      await this.audit.record(
+        AuditEvent.create(
+          {
+            organizationId,
+            actor: userActor(actorId),
+            action: AuditAction.PERMISSION_CREATED,
+            targetId: permission.key,
+            details: {
+              key: permission.key,
+              description: permission.description,
+            },
+          },
+          now,
+        ),
+      );
       return permission;
     });
 

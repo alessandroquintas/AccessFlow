@@ -19,6 +19,7 @@ import {
   seedOrganization,
   seedRole,
 } from '@test/factory/organizations/seed-organization';
+import { PrismaAuditLogRepository } from '@/modules/organizations/infrastructure/persistence/prisma-audit-log.repository';
 
 let prisma: PrismaService;
 let organizations: PrismaOrganizationRepository;
@@ -77,6 +78,7 @@ describe('Repositórios de organizations (integração)', () => {
       roles,
       memberships,
       users,
+      new PrismaAuditLogRepository(clients),
       transactions,
       new FixedClock(),
     );

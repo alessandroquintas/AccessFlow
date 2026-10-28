@@ -84,11 +84,11 @@ export class Organization {
     return this.state.status === OrganizationStatus.ACTIVE;
   }
 
+  /** O mesmo nome, depois de normalizado, não muda nada. */
   rename(name: string, now: Date = new Date()): void {
-    this.state = {
-      ...this.state,
-      name: OrganizationName.create(name),
-      updatedAt: now,
-    };
+    const next = OrganizationName.create(name);
+    if (next.value === this.state.name.value) return;
+
+    this.state = { ...this.state, name: next, updatedAt: now };
   }
 }

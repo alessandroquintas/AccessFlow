@@ -16,6 +16,12 @@ import { UserDirectoryPort } from '../ports/user-directory.port';
 import { describeInvitations } from '../services/describe-invitations';
 import { OrganizationAccessService } from '../services/organization-access.service';
 import { requireRole } from '../services/require-role';
+import {
+  AuditAction,
+  AuditEvent,
+  userActor,
+} from '../../domain/entities/audit-event.entity';
+import { AuditLog } from '../../domain/repositories/audit-log.repository';
 
 /** Proteção contra abuso; convites expirados não ocupam vaga. */
 export const MAX_PENDING_INVITATIONS_PER_ORGANIZATION = 50;
@@ -43,6 +49,7 @@ export class InviteMemberUseCase {
     private readonly roles: RoleRepository,
     private readonly users: UserDirectoryPort,
     private readonly access: OrganizationAccessService,
+    private readonly audit: AuditLog,
     private readonly transactions: TransactionManager,
     private readonly clock: ClockPort,
   ) {}
@@ -71,7 +78,10 @@ export class InviteMemberUseCase {
       await this.ensureNotMember(organizationId, email);
 
       const now = this.clock.now();
-      return this.invitations.savePending(
+      // Lido com a organização travada: é o convite que o savePending vai
+      // renovar (aceite, recusa e revogação também travam a organização).
+      const pending = await this.invitations.findPending(organizationId, email);
+      const saved = await this.invitations.savePending(
         Invitation.create(
           { organizationId, email, roleId: role.id, invitedByUserId: actorId },
           now,
@@ -81,6 +91,38 @@ export class InviteMemberUseCase {
           now,
         },
       );
+
+      const base = {
+        organizationId,
+        actor: userActor(actorId),
+        targetId: saved.id,
+      };
+      await this.audit.record(
+        pending?.id === saved.id
+          ? AuditEvent.create(
+              {
+                ...base,
+                action: AuditAction.INVITATION_RENEWED,
+                details: {
+                  roleId: saved.roleId,
+                  // Só quando o papel mudou.
+                  ...(pending.roleId !== saved.roleId && {
+                    previousRoleId: pending.roleId,
+                  }),
+                },
+              },
+              now,
+            )
+          : AuditEvent.create(
+              {
+                ...base,
+                action: AuditAction.INVITATION_CREATED,
+                details: { roleId: saved.roleId },
+              },
+              now,
+            ),
+      );
+      return saved;
     });
 
     const [result] = await describeInvitations(this.users, this.roles, [

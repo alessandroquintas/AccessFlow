@@ -30,6 +30,16 @@ export class PrismaInvitationRepository extends InvitationRepository {
     return record ? PrismaInvitationMapper.toDomain(record) : null;
   }
 
+  async findPending(
+    organizationId: string,
+    email: string,
+  ): Promise<Invitation | null> {
+    const record = await this.clients.current().invitation.findFirst({
+      where: { organizationId, email, status: PrismaInvitationStatus.PENDING },
+    });
+    return record ? PrismaInvitationMapper.toDomain(record) : null;
+  }
+
   async savePending(
     candidate: Invitation,
     {

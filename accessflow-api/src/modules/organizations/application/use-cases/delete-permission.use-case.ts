@@ -1,3 +1,4 @@
+import { ClockPort } from '@/shared/application/ports/clock.port';
 import { TransactionManager } from '@/shared/application/ports/transaction-manager.port';
 import { PermissionInUseError } from '../../domain/errors/permission-in-use.error';
 import { CustomPermissionRepository } from '../../domain/repositories/custom-permission.repository';
@@ -6,6 +7,12 @@ import { OrganizationPermission } from '../../policies/organization-permission';
 import { UserDirectoryPort } from '../ports/user-directory.port';
 import { OrganizationAccessService } from '../services/organization-access.service';
 import { requireCustomPermission } from '../services/require-custom-permission';
+import {
+  AuditAction,
+  AuditEvent,
+  userActor,
+} from '../../domain/entities/audit-event.entity';
+import { AuditLog } from '../../domain/repositories/audit-log.repository';
 
 export interface DeletePermissionInput {
   cognitoSub: string;
@@ -19,7 +26,9 @@ export class DeletePermissionUseCase {
     private readonly customPermissions: CustomPermissionRepository,
     private readonly users: UserDirectoryPort,
     private readonly access: OrganizationAccessService,
+    private readonly audit: AuditLog,
     private readonly transactions: TransactionManager,
+    private readonly clock: ClockPort,
   ) {}
 
   /** Definitivo. Chave de sistema responde PERMISSION_NOT_FOUND. */
@@ -49,6 +58,18 @@ export class DeletePermissionUseCase {
       }
 
       await this.customPermissions.delete(permission);
+      await this.audit.record(
+        AuditEvent.create(
+          {
+            organizationId,
+            actor: userActor(actorId),
+            action: AuditAction.PERMISSION_DELETED,
+            targetId: permission.key,
+            details: { key: permission.key },
+          },
+          this.clock.now(),
+        ),
+      );
     });
   }
 }

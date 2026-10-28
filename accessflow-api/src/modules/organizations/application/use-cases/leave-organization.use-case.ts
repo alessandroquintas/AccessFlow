@@ -4,6 +4,12 @@ import { MembershipRepository } from '../../domain/repositories/membership.repos
 import { OrganizationRepository } from '../../domain/repositories/organization.repository';
 import { UserDirectoryPort } from '../ports/user-directory.port';
 import { OrganizationAccessService } from '../services/organization-access.service';
+import {
+  AuditAction,
+  AuditEvent,
+  userActor,
+} from '../../domain/entities/audit-event.entity';
+import { AuditLog } from '../../domain/repositories/audit-log.repository';
 
 export interface LeaveOrganizationInput {
   cognitoSub: string;
@@ -16,6 +22,7 @@ export class LeaveOrganizationUseCase {
     private readonly memberships: MembershipRepository,
     private readonly users: UserDirectoryPort,
     private readonly access: OrganizationAccessService,
+    private readonly audit: AuditLog,
     private readonly transactions: TransactionManager,
     private readonly clock: ClockPort,
   ) {}
@@ -27,12 +34,25 @@ export class LeaveOrganizationUseCase {
       // Mesma ordem das demais escritas: organização → membership. O
       // membership é lido já com a organização travada.
       await this.organizations.lock(input.organizationId);
-      const { membership } = await this.access.requireMember(
+      const { organization, membership } = await this.access.requireMember(
         input.organizationId,
         userId,
       );
 
-      await this.memberships.remove(membership, this.clock.now());
+      const now = this.clock.now();
+      await this.memberships.remove(membership, now);
+      await this.audit.record(
+        AuditEvent.create(
+          {
+            organizationId: organization.id,
+            actor: userActor(userId),
+            action: AuditAction.MEMBER_LEFT,
+            targetId: userId,
+            details: { roleId: membership.roleId },
+          },
+          now,
+        ),
+      );
     });
   }
 }

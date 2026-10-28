@@ -32,6 +32,7 @@ import { InMemoryCustomPermissionRepository } from '@test/in-memory/organization
 import { FakeUserDirectory } from '@test/fakes/organizations/fake-user-directory';
 import { FakeTransactionManager } from '@test/fakes/shared/fake-transaction-manager';
 import { FixedClock } from '@test/fakes/shared/fixed-clock';
+import { InMemoryAuditLog } from '@test/in-memory/organizations/in-memory-audit-log';
 
 const START = new Date('2026-03-01T12:00:00.000Z');
 const LATER = new Date('2026-03-02T12:00:00.000Z');
@@ -116,6 +117,7 @@ describe('Permissões personalizadas', () => {
       customPermissions,
       users,
       access,
+      new InMemoryAuditLog(),
       transactions,
       clock,
     );
@@ -124,6 +126,7 @@ describe('Permissões personalizadas', () => {
       customPermissions,
       users,
       access,
+      new InMemoryAuditLog(),
       transactions,
       clock,
     );
@@ -132,7 +135,9 @@ describe('Permissões personalizadas', () => {
       customPermissions,
       users,
       access,
+      new InMemoryAuditLog(),
       transactions,
+      clock,
     );
 
     acme = createOrganization('acme');
