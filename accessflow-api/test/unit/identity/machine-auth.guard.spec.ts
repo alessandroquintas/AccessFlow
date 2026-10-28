@@ -87,12 +87,17 @@ describe('MachineAuthGuard', () => {
     );
   });
 
-  it('recusa token sem o escopo exigido', async () => {
+  it('recusa token sem o escopo exigido; a negação leva o client e os escopos exigidos', async () => {
     const { context, req } = contextFor('protegida', 'Bearer token-sem-escopo');
 
-    await expect(sut.canActivate(context)).rejects.toBeInstanceOf(
-      InsufficientScopeError,
-    );
+    const error = await sut.canActivate(context).catch((e: unknown) => e);
+
+    expect(error).toBeInstanceOf(InsufficientScopeError);
+    expect((error as InsufficientScopeError).securityDenial).toEqual({
+      event: 'machine.scope_denied',
+      clientId: 'client-integracao',
+      requiredScopes: [MachineScope.MEMBERS_READ],
+    });
     expect(req.machine).toBeUndefined();
   });
 
@@ -102,9 +107,14 @@ describe('MachineAuthGuard', () => {
       .mockImplementation(() => undefined);
     const { context } = contextFor('semEscopos', 'Bearer token-com-escopo');
 
-    await expect(sut.canActivate(context)).rejects.toBeInstanceOf(
-      InsufficientScopeError,
-    );
+    const error = await sut.canActivate(context).catch((e: unknown) => e);
+
+    expect(error).toBeInstanceOf(InsufficientScopeError);
+    expect((error as InsufficientScopeError).securityDenial).toEqual({
+      event: 'machine.scope_denied',
+      clientId: 'client-integracao',
+      requiredScopes: [],
+    });
     expect(warn).toHaveBeenCalled();
   });
 });

@@ -192,7 +192,10 @@ describe('Query me (e2e)', () => {
 
       expect(res.body.errors[0]).toEqual({
         message: 'Erro interno do servidor.',
-        extensions: { code: 'INTERNAL_SERVER_ERROR' },
+        extensions: {
+          code: 'INTERNAL_SERVER_ERROR',
+          requestId: res.headers['x-request-id'],
+        },
       });
       expect(JSON.stringify(res.body)).not.toContain('sensível');
       expect(logSpy).toHaveBeenCalled();

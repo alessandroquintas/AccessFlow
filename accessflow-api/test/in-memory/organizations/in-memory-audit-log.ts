@@ -7,7 +7,9 @@ import {
   AuditEventFilter,
   AuditEventPage,
   AuditLog,
+  RecordedAuditEvent,
 } from '@/modules/organizations/domain/repositories/audit-log.repository';
+import { RequestContextPort } from '@/shared/application/ports/request-context.port';
 
 function copy(event: AuditEvent): AuditEvent {
   return AuditEvent.restore({
@@ -49,14 +51,22 @@ function matches(event: AuditEvent, filter: AuditEventFilter): boolean {
 
 /** Só grava e lista, como a tabela; guarda cópias. */
 export class InMemoryAuditLog extends AuditLog {
-  private readonly rows: AuditEvent[] = [];
+  private readonly rows: RecordedAuditEvent[] = [];
+
+  /** Sem contexto, como fora de uma requisição: requestId null. */
+  constructor(private readonly requestContext?: RequestContextPort) {
+    super();
+  }
 
   get items(): AuditEvent[] {
-    return this.rows.map(copy);
+    return this.rows.map(({ event }) => copy(event));
   }
 
   async record(event: AuditEvent): Promise<void> {
-    this.rows.push(copy(event));
+    this.rows.push({
+      event: copy(event),
+      requestId: this.requestContext?.requestId() ?? null,
+    });
   }
 
   async listByOrganization(
@@ -67,11 +77,12 @@ export class InMemoryAuditLog extends AuditLog {
       filter = {},
     }: { first: number; after?: AuditEventCursor; filter?: AuditEventFilter },
   ): Promise<AuditEventPage> {
-    const found = this.items
-      .filter((e) => e.organizationId === organizationId)
-      .filter((e) => matches(e, filter))
-      .filter((e) => !after || isAfter(e, after))
-      .sort(compareNewestFirst);
+    const found = this.rows
+      .map(({ event, requestId }) => ({ event: copy(event), requestId }))
+      .filter(({ event }) => event.organizationId === organizationId)
+      .filter(({ event }) => matches(event, filter))
+      .filter(({ event }) => !after || isAfter(event, after))
+      .sort((a, b) => compareNewestFirst(a.event, b.event));
 
     return {
       items: found.slice(0, first),

@@ -35,8 +35,21 @@ import { PermissionInUseError } from '@/modules/organizations/domain/errors/perm
 import { PermissionNotFoundError } from '@/modules/organizations/domain/errors/permission-not-found.error';
 import { InvalidAuthorizationRequestError } from '@/modules/organizations/application/errors/invalid-authorization-request.error';
 import { InvalidAuditFilterError } from '@/modules/organizations/application/errors/invalid-audit-filter.error';
+import { RequestContextPort } from '@/shared/application/ports/request-context.port';
 
 const response = { tipo: 'resposta-http' };
+const REQUEST_ID = 'req-unit-0001';
+const UUID =
+  /^[0-9a-f]{8}-[0-9a-f]{4}-4[0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$/;
+
+/** O id que o RequestIdMiddleware abriu; undefined = erro antes dele. */
+let currentRequestId: string | undefined;
+
+class StubRequestContext extends RequestContextPort {
+  requestId(): string | undefined {
+    return currentRequestId;
+  }
+}
 
 let adapter: {
   reply: ReturnType<typeof vi.fn>;
@@ -47,8 +60,8 @@ let adapter: {
 let logError: ReturnType<typeof vi.spyOn>;
 let sut: DomainErrorFilter;
 
-function httpHost() {
-  const host = new ExecutionContextHost([{}, response, () => undefined]);
+function httpHost(request: Record<string, unknown> = {}) {
+  const host = new ExecutionContextHost([request, response, () => undefined]);
   host.setType('http');
   return host;
 }
@@ -70,7 +83,11 @@ describe('DomainErrorFilter', () => {
     logError = vi
       .spyOn(Logger.prototype, 'error')
       .mockImplementation(() => undefined);
-    sut = new DomainErrorFilter(adapter as unknown as HttpServer);
+    currentRequestId = REQUEST_ID;
+    sut = new DomainErrorFilter(
+      new StubRequestContext(),
+      adapter as unknown as HttpServer,
+    );
   });
 
   afterEach(() => {
@@ -115,11 +132,11 @@ describe('DomainErrorFilter', () => {
       expect(adapter.reply).not.toHaveBeenCalled();
     });
 
-    it('registra e repassa erros inesperados (o formatError mascara)', () => {
+    it('registra com o requestId e repassa erros inesperados (o formatError mascara)', () => {
       const error = new Error('falha interna');
 
       expect(() => sut.catch(error, graphqlHost())).toThrow(error);
-      expect(logError).toHaveBeenCalledWith(error);
+      expect(logError).toHaveBeenCalledWith(`requestId=${REQUEST_ID}`, error);
     });
 
     it('repassa HttpException sem registrar', () => {
@@ -281,7 +298,7 @@ describe('DomainErrorFilter', () => {
       expect(adapter.setHeader).not.toHaveBeenCalled();
     });
 
-    it('mascara erros inesperados com 500, sem stack, e registra o original', () => {
+    it('mascara erros inesperados com 500, sem stack, e registra o original com o requestId', () => {
       const error = new Error('falha interna com detalhe sensível');
 
       sut.catch(error, httpHost());
@@ -292,10 +309,76 @@ describe('DomainErrorFilter', () => {
         error: {
           code: 'INTERNAL_SERVER_ERROR',
           message: 'Erro interno do servidor.',
+          requestId: REQUEST_ID,
         },
       });
       expect(JSON.stringify(body)).not.toContain('sensível');
-      expect(logError).toHaveBeenCalledWith(error);
+      expect(logError).toHaveBeenCalledWith(`requestId=${REQUEST_ID}`, error);
+      // O middleware já pôs o X-Request-Id; o filtro não repete.
+      expect(adapter.setHeader).not.toHaveBeenCalled();
+    });
+
+    describe('sem contexto (erro antes do RequestIdMiddleware, ex.: body-parser)', () => {
+      beforeEach(() => {
+        currentRequestId = undefined;
+      });
+
+      it('usa o X-Request-Id válido do cliente no cabeçalho, no corpo e no log', () => {
+        const error = new Error('falha');
+
+        sut.catch(
+          error,
+          httpHost({ headers: { 'x-request-id': 'cli.ent-0_1' } }),
+        );
+
+        expect(adapter.setHeader).toHaveBeenCalledWith(
+          response,
+          'X-Request-Id',
+          'cli.ent-0_1',
+        );
+        expect(adapter.reply.mock.calls[0][1]).toMatchObject({
+          error: { requestId: 'cli.ent-0_1' },
+        });
+        expect(logError).toHaveBeenCalledWith('requestId=cli.ent-0_1', error);
+      });
+
+      it.each([
+        ['ausente', {}],
+        ['inválido', { 'x-request-id': 'com espaço 1' }],
+      ])(
+        'id %s: gera um UUID, o mesmo no cabeçalho e no corpo',
+        (_, headers) => {
+          sut.catch(new Error('falha'), httpHost({ headers }));
+
+          const [, , generated] = adapter.setHeader.mock.calls[0];
+          expect(generated).toMatch(UUID);
+          expect(adapter.reply.mock.calls[0][1]).toMatchObject({
+            error: { requestId: generated },
+          });
+        },
+      );
+
+      it('HttpException do Nest também leva o cabeçalho', () => {
+        sut.catch(
+          new NotFoundException('Cannot GET /x'),
+          httpHost({ headers: { 'x-request-id': 'cliente-404' } }),
+        );
+
+        expect(adapter.setHeader).toHaveBeenCalledWith(
+          response,
+          'X-Request-Id',
+          'cliente-404',
+        );
+        expect(adapter.reply.mock.calls[0][2]).toBe(404);
+      });
+
+      it('resposta já enviada: não tenta escrever o cabeçalho', () => {
+        adapter.isHeadersSent.mockReturnValue(true);
+
+        sut.catch(new Error('falha'), httpHost());
+
+        expect(adapter.setHeader).not.toHaveBeenCalled();
+      });
     });
 
     it('mantém o comportamento padrão do Nest para HttpException', () => {

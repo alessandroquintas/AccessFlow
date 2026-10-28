@@ -1,5 +1,13 @@
-import { afterAll, beforeAll, beforeEach, describe, expect, it } from 'vitest';
-import type { INestApplication } from '@nestjs/common';
+import {
+  afterAll,
+  beforeAll,
+  beforeEach,
+  describe,
+  expect,
+  it,
+  vi,
+} from 'vitest';
+import { Logger, type INestApplication } from '@nestjs/common';
 import request from 'supertest';
 import { PrismaService } from '@/shared/infrastructure/database/prisma.service';
 import { MachineScope } from '@/modules/identity/presentation/auth/machine-scope';
@@ -73,7 +81,7 @@ describe('POST /v1/authorize (e2e)', () => {
   beforeEach(async () => {
     tokens.reset();
     machines.reset();
-    await prisma.$executeRaw`TRUNCATE TABLE "invitations", "integration_clients", "memberships", "organizations", "users" CASCADE`;
+    await prisma.$executeRaw`TRUNCATE TABLE "authorization_decisions", "invitations", "integration_clients", "memberships", "organizations", "users" CASCADE`;
 
     const ana = await createUser('ana', 'ACTIVE');
     const bruno = await createUser('bruno', 'ACTIVE');
@@ -339,5 +347,117 @@ describe('POST /v1/authorize (e2e)', () => {
       },
     });
     expect(res.body).toEqual(members.body);
+  });
+  describe('registro da decisão', () => {
+    it.each([
+      ['tudo permitido', 'bruno', ['members:read', APPROVE]],
+      ['parcial, com repetidas', 'bruno', [SIGN, APPROVE, SIGN]],
+      ['não membro', 'eva', [APPROVE]],
+      ['membro removido', 'davi', [APPROVE]],
+      ['conta desativada', 'carla', [APPROVE, 'members:read']],
+    ])(
+      '200 %s: exatamente uma decisão, igual à resposta',
+      async (_, sub, permissions) => {
+        const res = await authorize(users[sub], permissions);
+
+        expect(res.status).toBe(200);
+        expect(await prisma.authorizationDecision.findMany()).toEqual([
+          {
+            id: expect.any(String),
+            organizationId: acmeId,
+            clientId: 'client-acme',
+            subjectUserId: users[sub],
+            results: res.body.results,
+            allowed: res.body.allowed,
+            requestId: res.headers['x-request-id'],
+            decidedAt: expect.any(Date),
+          },
+        ]);
+      },
+    );
+
+    it.each([
+      ['400 chave fora do formato', () => authorize(users.bruno, ['X:y'])],
+      ['400 userId que não é UUID', () => authorize('nao-e-uuid', [APPROVE])],
+      [
+        '400 corpo que não é JSON',
+        () =>
+          request(app.getHttpServer())
+            .post('/v1/authorize')
+            .set('Authorization', 'Bearer token-acme')
+            .set('Content-Type', 'application/json')
+            .send('{oops'),
+      ],
+      ['401 sem token', () => authorize(users.bruno, [APPROVE], acmeId, '')],
+      [
+        '403 sem o escopo',
+        () => authorize(users.bruno, [APPROVE], acmeId, 'token-acme-members'),
+      ],
+      ['404 outra organização', () => authorize(users.ana, [APPROVE], betaId)],
+    ])('%s: nenhuma decisão', async (label, send) => {
+      const res = await send();
+
+      expect(res.status).toBe(Number(label.slice(0, 3)));
+      expect(await prisma.authorizationDecision.count()).toBe(0);
+    });
+
+    it('falha ao gravar: 500 mascarado, sem a decisão no corpo e sem registro', async () => {
+      const logError = vi
+        .spyOn(Logger.prototype, 'error')
+        .mockImplementation(() => undefined);
+      // Falha de verdade no banco, só durante este teste.
+      await prisma.$executeRawUnsafe(`
+        CREATE FUNCTION test_fail_decision() RETURNS trigger LANGUAGE plpgsql AS $$
+        BEGIN RAISE EXCEPTION 'gravação recusada no teste'; END $$`);
+      await prisma.$executeRawUnsafe(`
+        CREATE TRIGGER test_fail_decision BEFORE INSERT ON authorization_decisions
+        FOR EACH ROW EXECUTE FUNCTION test_fail_decision()`);
+      try {
+        const res = await authorize(users.bruno, ['members:read', APPROVE]);
+
+        expect(res.status).toBe(500);
+        expect(res.body).toEqual({
+          error: {
+            code: 'INTERNAL_SERVER_ERROR',
+            message: 'Erro interno do servidor.',
+            requestId: res.headers['x-request-id'],
+          },
+        });
+        expect(await prisma.authorizationDecision.count()).toBe(0);
+        expect(logError).toHaveBeenCalledWith(
+          `requestId=${res.headers['x-request-id']}`,
+          expect.any(Error),
+        );
+      } finally {
+        await prisma.$executeRawUnsafe(
+          'DROP TRIGGER test_fail_decision ON authorization_decisions',
+        );
+        await prisma.$executeRawUnsafe('DROP FUNCTION test_fail_decision()');
+        logError.mockRestore();
+      }
+
+      // Sem a falha, o mesmo pedido volta a responder e a registrar.
+      expect((await authorize(users.bruno, [APPROVE])).status).toBe(200);
+      expect(await prisma.authorizationDecision.count()).toBe(1);
+    });
+
+    it('ação administrativa em andamento na organização: o authorize responde sem esperar por ela', async () => {
+      // T0 trava a organização como toda ação administrativa (FOR UPDATE) e
+      // só termina depois da resposta. Com FK, o INSERT da decisão esperaria
+      // essa trava, e o pedido só voltaria no timeout de T0.
+      await prisma.$transaction(
+        async (tx) => {
+          await tx.$queryRaw`SELECT id FROM organizations WHERE id = ${acmeId}::uuid FOR UPDATE`;
+
+          const started = Date.now();
+          const res = await authorize(users.bruno, [APPROVE]);
+
+          expect(Date.now() - started).toBeLessThan(1000);
+          expect(res.status).toBe(200);
+        },
+        { timeout: 3_000 },
+      );
+      expect(await prisma.authorizationDecision.count()).toBe(1);
+    });
   });
 });

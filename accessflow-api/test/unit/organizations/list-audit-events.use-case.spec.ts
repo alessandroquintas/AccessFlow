@@ -18,6 +18,7 @@ import { InMemoryMembershipRepository } from '@test/in-memory/organizations/in-m
 import { InMemoryRoleRepository } from '@test/in-memory/organizations/in-memory-role-repository';
 import { InMemoryAuditLog } from '@test/in-memory/organizations/in-memory-audit-log';
 import { FakeUserDirectory } from '@test/fakes/organizations/fake-user-directory';
+import { AsyncLocalRequestContext } from '@/shared/infrastructure/request-context/async-local-request-context';
 
 const T0 = new Date('2026-03-01T12:00:00.000Z');
 const at = (minutes: number) => new Date(T0.getTime() + minutes * 60_000);
@@ -33,6 +34,8 @@ const OUTSIDER = {
 };
 /** Ator gravado na trilha, sem perfil no diretório. */
 const GHOST_ID = '44444444-4444-4444-8444-444444444444';
+
+const requestContext = new AsyncLocalRequestContext();
 
 let roles: InMemoryRoleRepository;
 let audit: InMemoryAuditLog;
@@ -74,7 +77,7 @@ describe('ListAuditEventsUseCase', () => {
     roles = new InMemoryRoleRepository();
     const memberships = new InMemoryMembershipRepository(roles);
     const organizations = new InMemoryOrganizationRepository();
-    audit = new InMemoryAuditLog();
+    audit = new InMemoryAuditLog(requestContext);
     users = new FakeUserDirectory();
     users.register(OWNER.sub, OWNER.id, { name: 'Olga' });
     users.register(MEMBER.sub, MEMBER.id, { name: 'Mário', active: true });
@@ -161,6 +164,21 @@ describe('ListAuditEventsUseCase', () => {
         'Olga',
         'Mário',
         'Olga',
+      ]);
+    });
+
+    it('cada item traz o requestId com que o evento foi gravado', async () => {
+      const [inRequest, outside] = [event(1), event(0)];
+      await requestContext.run({ requestId: 'req-lista-0001' }, () =>
+        audit.record(inRequest),
+      );
+      await audit.record(outside);
+
+      const { items } = await list();
+
+      expect(items.map((i) => [i.event.id, i.requestId])).toEqual([
+        [inRequest.id, 'req-lista-0001'],
+        [outside.id, null],
       ]);
     });
 

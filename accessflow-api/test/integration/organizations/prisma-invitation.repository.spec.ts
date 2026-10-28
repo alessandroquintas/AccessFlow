@@ -35,6 +35,10 @@ import {
   seedOrganization,
 } from '@test/factory/organizations/seed-organization';
 import { PrismaAuditLogRepository } from '@/modules/organizations/infrastructure/persistence/prisma-audit-log.repository';
+import { AsyncLocalRequestContext } from '@/shared/infrastructure/request-context/async-local-request-context';
+
+// Fora de requisição: o request_id dos eventos fica nulo.
+const requestContext = new AsyncLocalRequestContext();
 
 const DAY = 24 * 60 * 60 * 1000;
 const NOW = new Date('2026-03-01T12:00:00.000Z');
@@ -645,7 +649,7 @@ describe('PrismaInvitationRepository (integração)', () => {
         new PrismaRoleRepository(clients, transactions),
         memberships,
         users,
-        new PrismaAuditLogRepository(clients),
+        new PrismaAuditLogRepository(clients, requestContext),
         transactions,
         new FixedClock(at(DAY)),
       );

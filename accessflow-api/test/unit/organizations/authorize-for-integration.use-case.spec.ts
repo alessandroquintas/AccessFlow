@@ -31,7 +31,10 @@ import { InMemoryRoleRepository } from '@test/in-memory/organizations/in-memory-
 import { InMemoryCustomPermissionRepository } from '@test/in-memory/organizations/in-memory-custom-permission-repository';
 import { InMemoryIntegrationClientRepository } from '@test/in-memory/organizations/in-memory-integration-client-repository';
 import { InMemoryAuthorizationSnapshotReader } from '@test/in-memory/organizations/in-memory-authorization-snapshot-reader';
+import { InMemoryAuthorizationDecisionLog } from '@test/in-memory/organizations/in-memory-authorization-decision-log';
 import { FakeUserDirectory } from '@test/fakes/organizations/fake-user-directory';
+import { FixedClock } from '@test/fakes/shared/fixed-clock';
+import { DomainError } from '@/shared/domain/errors/domain.error';
 
 const NOW = new Date('2026-03-01T12:00:00.000Z');
 const { MEMBERS_READ, MEMBERS_INVITE, ROLES_MANAGE } = OrganizationPermission;
@@ -50,6 +53,7 @@ let memberships: InMemoryMembershipRepository;
 let organizations: InMemoryOrganizationRepository;
 let customPermissions: InMemoryCustomPermissionRepository;
 let integrationClients: InMemoryIntegrationClientRepository;
+let decisions: InMemoryAuthorizationDecisionLog;
 let sut: AuthorizeForIntegrationUseCase;
 let acme: Organization;
 let beta: Organization;
@@ -136,6 +140,7 @@ describe('AuthorizeForIntegrationUseCase', () => {
       users.register(`sub-${id}`, id);
     }
     users.register(`sub-${INACTIVE_ID}`, INACTIVE_ID, { active: false });
+    decisions = new InMemoryAuthorizationDecisionLog();
 
     sut = new AuthorizeForIntegrationUseCase(
       integrationClients,
@@ -146,6 +151,8 @@ describe('AuthorizeForIntegrationUseCase', () => {
         customPermissions,
       ),
       users,
+      decisions,
+      new FixedClock(NOW),
     );
 
     acme = Organization.create({ name: 'Acme', slug: 'acme' });
@@ -313,11 +320,21 @@ describe('AuthorizeForIntegrationUseCase', () => {
       ['client desconhecido', () => ({ clientId: 'client-nenhum' })],
       ['client revogado', () => ({ clientId: 'client-revogado' })],
       ['organização de outro tenant', () => ({ organizationId: beta.id })],
-    ])('%s: ORGANIZATION_NOT_FOUND', async (_, overrides) => {
-      await expect(
-        authorize(OWNER_ID, [APPROVE], overrides()),
-      ).rejects.toBeInstanceOf(OrganizationNotFoundError);
-    });
+    ])(
+      '%s: ORGANIZATION_NOT_FOUND, e a negação vira machine.organization_denied',
+      async (_, overrides) => {
+        const input = overrides();
+        const error = await authorize(OWNER_ID, [APPROVE], input).catch(
+          (e: unknown) => e,
+        );
+
+        expect(error).toBeInstanceOf(OrganizationNotFoundError);
+        expect((error as OrganizationNotFoundError).securityDenial).toEqual({
+          event: 'machine.organization_denied',
+          clientId: 'clientId' in input ? input.clientId : 'client-acme',
+        });
+      },
+    );
 
     it('organização inativa: ORGANIZATION_NOT_FOUND', async () => {
       organizations.items = organizations.items.map((o) =>
@@ -333,9 +350,15 @@ describe('AuthorizeForIntegrationUseCase', () => {
           : o,
       );
 
-      await expect(authorize(OWNER_ID, [APPROVE])).rejects.toBeInstanceOf(
-        OrganizationNotFoundError,
+      const error = await authorize(OWNER_ID, [APPROVE]).catch(
+        (e: unknown) => e,
       );
+
+      // Dentro do vínculo: é organização inexistente, não negação.
+      expect(error).toBeInstanceOf(OrganizationNotFoundError);
+      expect(
+        (error as OrganizationNotFoundError).securityDenial,
+      ).toBeUndefined();
     });
   });
 
@@ -346,5 +369,84 @@ describe('AuthorizeForIntegrationUseCase', () => {
     await expect(authorize(FINANCE_ID, [APPROVE])).rejects.toThrow(
       'Membership sem papel ativo na organização.',
     );
+  });
+  describe('registro da decisão', () => {
+    function recorded() {
+      return decisions.items.map((d) => ({
+        organizationId: d.organizationId,
+        clientId: d.clientId,
+        subjectUserId: d.subjectUserId,
+        allowed: d.allowed,
+        results: d.results,
+        decidedAt: d.decidedAt,
+      }));
+    }
+
+    it.each([
+      ['tudo permitido', FINANCE_ID, [APPROVE, MEMBERS_READ]],
+      ['parcial, com repetidas', FINANCE_ID, [SIGN, APPROVE, SIGN]],
+      ['não membro', OUTSIDER_ID, [APPROVE]],
+      ['membro removido', REMOVED_ID, [APPROVE]],
+      ['conta desativada', INACTIVE_ID, [APPROVE, MEMBERS_READ]],
+      ['usuário inexistente', UNKNOWN_ID, [APPROVE]],
+    ])(
+      '%s: exatamente uma decisão, igual à resposta',
+      async (_, userId, permissions) => {
+        const result = await authorize(userId, permissions);
+
+        expect(recorded()).toEqual([
+          {
+            organizationId: acme.id,
+            clientId: 'client-acme',
+            subjectUserId: userId,
+            allowed: result.allowed,
+            results: result.results,
+            decidedAt: NOW,
+          },
+        ]);
+      },
+    );
+
+    it('com os ids normalizados', async () => {
+      await authorize(FINANCE_ID.toUpperCase(), [APPROVE], {
+        organizationId: acme.id.toUpperCase(),
+      });
+
+      expect(recorded()).toMatchObject([
+        { organizationId: acme.id, subjectUserId: FINANCE_ID },
+      ]);
+    });
+
+    it.each([
+      ['400: id que não é UUID', () => authorize('nao-e-uuid', [APPROVE])],
+      ['400: lista vazia', () => authorize(FINANCE_ID, [])],
+      ['400: chave fora do formato', () => authorize(FINANCE_ID, ['X'])],
+      [
+        '404: client desconhecido',
+        () => authorize(FINANCE_ID, [APPROVE], { clientId: 'client-nenhum' }),
+      ],
+      [
+        '404: organização de outro tenant',
+        () => authorize(OWNER_ID, [APPROVE], { organizationId: beta.id }),
+      ],
+    ])('%s: nada é registrado', async (_, run) => {
+      await expect(run()).rejects.toBeInstanceOf(DomainError);
+      expect(decisions.items).toEqual([]);
+    });
+
+    it('papel apagado: erro interno e nada registrado', async () => {
+      finance.softDelete(NOW);
+      roles.seed(finance);
+
+      await expect(authorize(FINANCE_ID, [APPROVE])).rejects.toThrow(Error);
+      expect(decisions.items).toEqual([]);
+    });
+
+    it('falha ao gravar: o erro sobe e não há resposta (falha fechada)', async () => {
+      const failure = new Error('banco fora');
+      decisions.failWith(failure);
+
+      await expect(authorize(FINANCE_ID, [APPROVE])).rejects.toBe(failure);
+    });
   });
 });

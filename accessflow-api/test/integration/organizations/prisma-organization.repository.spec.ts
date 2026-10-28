@@ -20,6 +20,10 @@ import {
   seedRole,
 } from '@test/factory/organizations/seed-organization';
 import { PrismaAuditLogRepository } from '@/modules/organizations/infrastructure/persistence/prisma-audit-log.repository';
+import { AsyncLocalRequestContext } from '@/shared/infrastructure/request-context/async-local-request-context';
+
+// Fora de requisição: o request_id dos eventos fica nulo.
+const requestContext = new AsyncLocalRequestContext();
 
 let prisma: PrismaService;
 let organizations: PrismaOrganizationRepository;
@@ -78,7 +82,7 @@ describe('Repositórios de organizations (integração)', () => {
       roles,
       memberships,
       users,
-      new PrismaAuditLogRepository(clients),
+      new PrismaAuditLogRepository(clients, requestContext),
       transactions,
       new FixedClock(),
     );

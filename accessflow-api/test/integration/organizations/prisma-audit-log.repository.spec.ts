@@ -9,10 +9,14 @@ import {
   AuditEvent,
 } from '@/modules/organizations/domain/entities/audit-event.entity';
 import { PrismaAuditLogRepository } from '@/modules/organizations/infrastructure/persistence/prisma-audit-log.repository';
+import { AsyncLocalRequestContext } from '@/shared/infrastructure/request-context/async-local-request-context';
 import {
   SeededOrganization,
   seedOrganization,
 } from '@test/factory/organizations/seed-organization';
+
+// Fora de requisição: o request_id dos eventos fica nulo.
+const requestContext = new AsyncLocalRequestContext();
 
 const T0 = new Date('2026-03-01T12:00:00.000Z');
 const at = (minutes: number) => new Date(T0.getTime() + minutes * 60_000);
@@ -38,7 +42,7 @@ describe('PrismaAuditLogRepository (integração)', () => {
     await prisma.$connect();
     const clients = new PrismaClientProvider(prisma);
     transactions = new PrismaTransactionManager(prisma, clients);
-    audit = new PrismaAuditLogRepository(clients);
+    audit = new PrismaAuditLogRepository(clients, requestContext);
   });
 
   afterAll(async () => {
@@ -82,7 +86,7 @@ describe('PrismaAuditLogRepository (integração)', () => {
       first: 50,
       filter,
     });
-    return items;
+    return items.map(({ event }) => event);
   }
 
   it('record grava e a leitura devolve o mesmo evento, com o details jsonb intacto', async () => {
@@ -115,7 +119,25 @@ describe('PrismaAuditLogRepository (integração)', () => {
       targetType: 'role',
       targetId: acme.roleIds.MEMBER,
       occurredAt: T0,
+      requestId: null,
     });
+  });
+
+  it('grava o id de correlação da requisição em andamento (também dentro da transação) e a leitura o devolve', async () => {
+    const [direct, inTransaction] = [roleCreated(at(0)), roleCreated(at(1))];
+
+    await requestContext.run({ requestId: 'req-direto-0001' }, () =>
+      audit.record(direct),
+    );
+    await requestContext.run({ requestId: 'req-transacao-0002' }, () =>
+      transactions.run(() => audit.record(inTransaction)),
+    );
+
+    const { items } = await audit.listByOrganization(acme.id, { first: 10 });
+    expect(items.map(({ event, requestId }) => [event.id, requestId])).toEqual([
+      [inTransaction.id, 'req-transacao-0002'],
+      [direct.id, 'req-direto-0001'],
+    ]);
   });
 
   it('pagina do mais recente para o mais antigo, estável com occurredAt empatado', async () => {
@@ -128,10 +150,10 @@ describe('PrismaAuditLogRepository (integração)', () => {
     let pages = 0;
     for (;;) {
       const page = await audit.listByOrganization(acme.id, { first: 2, after });
-      seen.push(...page.items);
+      seen.push(...page.items.map(({ event }) => event));
       pages++;
       if (!page.hasNextPage) break;
-      const last = page.items[page.items.length - 1];
+      const last = page.items[page.items.length - 1].event;
       after = { occurredAt: last.occurredAt, id: last.id };
     }
 

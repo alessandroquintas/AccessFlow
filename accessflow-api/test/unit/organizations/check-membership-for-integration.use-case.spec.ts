@@ -131,23 +131,27 @@ describe('CheckMembershipForIntegrationUseCase', () => {
 
   describe('responde ORGANIZATION_NOT_FOUND', () => {
     it.each([
-      ['client inexistente', 'client-desconhecido'],
-      ['client revogado', 'client-revogado'],
-    ])('para %s', async (_cenario, clientId) => {
-      await expect(
-        sut.execute({ clientId, organizationId: acme.id, userId: MEMBER_ID }),
-      ).rejects.toBeInstanceOf(OrganizationNotFoundError);
-    });
+      ['client inexistente', 'client-desconhecido', () => acme.id],
+      ['client revogado', 'client-revogado', () => acme.id],
+      ['organização de outro tenant', 'client-acme', () => beta.id],
+    ])(
+      'para %s, e a negação vira machine.organization_denied',
+      async (_cenario, clientId, organizationId) => {
+        const error = await sut
+          .execute({
+            clientId,
+            organizationId: organizationId(),
+            userId: MEMBER_ID,
+          })
+          .catch((e: unknown) => e);
 
-    it('para organização de outro tenant', async () => {
-      await expect(
-        sut.execute({
-          clientId: 'client-acme',
-          organizationId: beta.id,
-          userId: OWNER_ID,
-        }),
-      ).rejects.toBeInstanceOf(OrganizationNotFoundError);
-    });
+        expect(error).toBeInstanceOf(OrganizationNotFoundError);
+        expect((error as OrganizationNotFoundError).securityDenial).toEqual({
+          event: 'machine.organization_denied',
+          clientId,
+        });
+      },
+    );
 
     it('para organizationId que não é UUID', async () => {
       await expect(
@@ -186,13 +190,19 @@ describe('CheckMembershipForIntegrationUseCase', () => {
       addMember(inactive.id, MEMBER_ID);
       addClient('client-inativa', inactive.id);
 
-      await expect(
-        sut.execute({
+      const error = await sut
+        .execute({
           clientId: 'client-inativa',
           organizationId: inactive.id,
           userId: MEMBER_ID,
-        }),
-      ).rejects.toBeInstanceOf(OrganizationNotFoundError);
+        })
+        .catch((e: unknown) => e);
+
+      // Dentro do vínculo: é organização inexistente, não negação.
+      expect(error).toBeInstanceOf(OrganizationNotFoundError);
+      expect(
+        (error as OrganizationNotFoundError).securityDenial,
+      ).toBeUndefined();
     });
   });
 

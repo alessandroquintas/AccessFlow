@@ -53,6 +53,10 @@ import {
   seedRole,
 } from '@test/factory/organizations/seed-organization';
 import { PrismaAuditLogRepository } from '@/modules/organizations/infrastructure/persistence/prisma-audit-log.repository';
+import { AsyncLocalRequestContext } from '@/shared/infrastructure/request-context/async-local-request-context';
+
+// Fora de requisição: o request_id dos eventos fica nulo.
+const requestContext = new AsyncLocalRequestContext();
 
 let prisma: PrismaService;
 let users: FakeUserDirectory;
@@ -191,7 +195,7 @@ describe('Casos de uso de organizations com Prisma (integração)', () => {
       invitations,
       organizations,
       users,
-      new PrismaAuditLogRepository(clients),
+      new PrismaAuditLogRepository(clients, requestContext),
       transactions,
       clock,
     );
@@ -201,7 +205,7 @@ describe('Casos de uso de organizations com Prisma (integração)', () => {
       roles,
       memberships,
       users,
-      new PrismaAuditLogRepository(clients),
+      new PrismaAuditLogRepository(clients, requestContext),
       transactions,
       clock,
     );
@@ -212,7 +216,7 @@ describe('Casos de uso de organizations com Prisma (integração)', () => {
       roles,
       users,
       access,
-      new PrismaAuditLogRepository(clients),
+      new PrismaAuditLogRepository(clients, requestContext),
       transactions,
       clock,
     );
@@ -222,7 +226,7 @@ describe('Casos de uso de organizations com Prisma (integração)', () => {
       roles,
       memberships,
       users,
-      new PrismaAuditLogRepository(clients),
+      new PrismaAuditLogRepository(clients, requestContext),
       transactions,
       clock,
     );
@@ -231,7 +235,7 @@ describe('Casos de uso de organizations com Prisma (integração)', () => {
       invitations,
       users,
       access,
-      new PrismaAuditLogRepository(clients),
+      new PrismaAuditLogRepository(clients, requestContext),
       transactions,
       clock,
     );
@@ -241,7 +245,7 @@ describe('Casos de uso de organizations com Prisma (integração)', () => {
       customPermissions,
       users,
       access,
-      new PrismaAuditLogRepository(clients),
+      new PrismaAuditLogRepository(clients, requestContext),
       transactions,
       clock,
     );
@@ -252,7 +256,7 @@ describe('Casos de uso de organizations com Prisma (integração)', () => {
       customPermissions,
       users,
       access,
-      new PrismaAuditLogRepository(clients),
+      new PrismaAuditLogRepository(clients, requestContext),
       transactions,
       clock,
     );
@@ -261,7 +265,7 @@ describe('Casos de uso de organizations com Prisma (integração)', () => {
       roles,
       users,
       access,
-      new PrismaAuditLogRepository(clients),
+      new PrismaAuditLogRepository(clients, requestContext),
       transactions,
       clock,
     );
@@ -271,7 +275,7 @@ describe('Casos de uso de organizations com Prisma (integração)', () => {
       roles,
       users,
       access,
-      new PrismaAuditLogRepository(clients),
+      new PrismaAuditLogRepository(clients, requestContext),
       transactions,
       clock,
     );
@@ -280,7 +284,7 @@ describe('Casos de uso de organizations com Prisma (integração)', () => {
       customPermissions,
       users,
       access,
-      new PrismaAuditLogRepository(clients),
+      new PrismaAuditLogRepository(clients, requestContext),
       transactions,
       clock,
     );
@@ -289,7 +293,7 @@ describe('Casos de uso de organizations com Prisma (integração)', () => {
       customPermissions,
       users,
       access,
-      new PrismaAuditLogRepository(clients),
+      new PrismaAuditLogRepository(clients, requestContext),
       transactions,
       clock,
     );
@@ -1086,7 +1090,10 @@ describe('Casos de uso de organizations com Prisma (integração)', () => {
 
       async record(event: AuditEvent): Promise<void> {
         if (this.when === 'after') {
-          await new PrismaAuditLogRepository(deps.clients).record(event);
+          await new PrismaAuditLogRepository(
+            deps.clients,
+            requestContext,
+          ).record(event);
           this.written++;
         }
         throw new Error(`falha forçada (${this.when})`);
@@ -1321,7 +1328,7 @@ describe('Casos de uso de organizations com Prisma (integração)', () => {
         organizations,
         users,
         deps.access,
-        new PrismaAuditLogRepository(deps.clients),
+        new PrismaAuditLogRepository(deps.clients, requestContext),
         deps.transactions,
         deps.clock,
       );

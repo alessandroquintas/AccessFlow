@@ -102,14 +102,23 @@ describe('Acesso a organizações', () => {
       expect(result.membership.userId).toBe(MEMBER.id);
     });
 
-    it('nega membro sem a permissão com FORBIDDEN', async () => {
-      await expect(
-        access.requirePermission(
+    it('nega membro sem a permissão com FORBIDDEN, levando a organização e a permissão', async () => {
+      const error = await access
+        .requirePermission(
           organization.id,
           MEMBER.id,
           OrganizationPermission.ORGANIZATIONS_UPDATE,
-        ),
-      ).rejects.toBeInstanceOf(OrganizationPermissionDeniedError);
+        )
+        .catch((e: unknown) => e);
+
+      expect(error).toBeInstanceOf(OrganizationPermissionDeniedError);
+      expect(
+        (error as OrganizationPermissionDeniedError).securityDenial,
+      ).toEqual({
+        event: 'access.forbidden',
+        organizationId: organization.id,
+        permission: OrganizationPermission.ORGANIZATIONS_UPDATE,
+      });
     });
 
     it('membership removido não tem permissão nenhuma', async () => {
@@ -124,14 +133,19 @@ describe('Acesso a organizações', () => {
       ).rejects.toBeInstanceOf(OrganizationNotFoundError);
     });
 
-    it('não membro recebe NOT_FOUND, mesmo pedindo permissão', async () => {
-      await expect(
-        access.requirePermission(
+    it('não membro recebe NOT_FOUND, mesmo pedindo permissão, e não vira evento', async () => {
+      const error = await access
+        .requirePermission(
           organization.id,
           OUTSIDER.id,
           OrganizationPermission.MEMBERS_READ,
-        ),
-      ).rejects.toBeInstanceOf(OrganizationNotFoundError);
+        )
+        .catch((e: unknown) => e);
+
+      expect(error).toBeInstanceOf(OrganizationNotFoundError);
+      expect(
+        (error as OrganizationNotFoundError).securityDenial,
+      ).toBeUndefined();
     });
   });
 

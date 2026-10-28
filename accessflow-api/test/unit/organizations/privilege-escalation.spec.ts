@@ -203,4 +203,31 @@ describe('Anti-escalada de privilégio', () => {
       allowed(() => ensureCanInviteWithRole(recruiter, empty));
     });
   });
+
+  it('a negação leva a organização do papel de quem age', () => {
+    const attempts = [
+      () => ensureCanCreateRole(manager, [MEMBERS_REMOVE]),
+      () => ensureCanInviteWithRole(manager, owner),
+      () => ensureCanAssignRole(manager, { from: member, to: everything }),
+      () =>
+        ensureCanChangePermissions(manager, {
+          before: [ORGANIZATIONS_UPDATE],
+          after: [],
+        }),
+    ];
+
+    for (const attempt of attempts) {
+      let error: unknown;
+      try {
+        attempt();
+      } catch (e) {
+        error = e;
+      }
+      expect(error).toBeInstanceOf(PrivilegeEscalationError);
+      expect((error as PrivilegeEscalationError).securityDenial).toEqual({
+        event: 'access.privilege_escalation',
+        organizationId: 'org-1',
+      });
+    }
+  });
 });
