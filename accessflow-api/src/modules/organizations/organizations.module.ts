@@ -25,6 +25,7 @@ import { PrismaIntegrationClientRepository } from './infrastructure/persistence/
 import { CheckMembershipForIntegrationUseCase } from './application/use-cases/check-membership-for-integration.use-case';
 import { IntegrationMembersController } from './presentation/http/controllers/integration-members.controller';
 import { ClockModule } from '@/shared/infrastructure/clock/clock.module';
+import { RequestContextModule } from '@/shared/infrastructure/request-context/request-context.module';
 import { ClockPort } from '@/shared/application/ports/clock.port';
 import { InvitationRepository } from './domain/repositories/invitation.repository';
 import { PrismaInvitationRepository } from './infrastructure/persistence/prisma-invitation.repository';
@@ -57,14 +58,24 @@ import { AuditLog } from './domain/repositories/audit-log.repository';
 import { PrismaAuditLogRepository } from './infrastructure/persistence/prisma-audit-log.repository';
 import { ListAuditEventsUseCase } from './application/use-cases/list-audit-events.use-case';
 import { AuditResolver } from './presentation/graphql/resolvers/audit.resolver';
+import { AuthorizationDecisionLog } from './domain/repositories/authorization-decision-log.repository';
+import { PrismaAuthorizationDecisionLog } from './infrastructure/persistence/prisma-authorization-decision-log';
+import { ListAuthorizationDecisionsUseCase } from './application/use-cases/list-authorization-decisions.use-case';
+import { AuthorizationDecisionsResolver } from './presentation/graphql/resolvers/authorization-decisions.resolver';
 import { GetPermissionCatalogUseCase } from './application/use-cases/get-permission-catalog.use-case';
 import { ListOrganizationPermissionsUseCase } from './application/use-cases/list-organization-permissions.use-case';
 import { CreatePermissionUseCase } from './application/use-cases/create-permission.use-case';
 import { UpdatePermissionUseCase } from './application/use-cases/update-permission.use-case';
 import { DeletePermissionUseCase } from './application/use-cases/delete-permission.use-case';
+import { SecurityEventLog } from './domain/repositories/security-event-log.repository';
+import { PrismaSecurityEventLog } from './infrastructure/persistence/prisma-security-event-log';
+import { SecurityDenialRecorder } from '@/shared/application/ports/security-denial-recorder.port';
+import { SecurityEventRecorder } from './application/services/security-event-recorder';
+import { ListSecurityEventsUseCase } from './application/use-cases/list-security-events.use-case';
+import { SecurityEventsResolver } from './presentation/graphql/resolvers/security-events.resolver';
 
 @Module({
-  imports: [PrismaModule, IdentityModule, ClockModule],
+  imports: [PrismaModule, IdentityModule, ClockModule, RequestContextModule],
   controllers: [
     IntegrationMembersController,
     IntegrationAuthorizationController,
@@ -88,6 +99,11 @@ import { DeletePermissionUseCase } from './application/use-cases/delete-permissi
       useClass: PrismaAuthorizationSnapshotReader,
     },
     { provide: AuditLog, useClass: PrismaAuditLogRepository },
+    {
+      provide: AuthorizationDecisionLog,
+      useClass: PrismaAuthorizationDecisionLog,
+    },
+    { provide: SecurityEventLog, useClass: PrismaSecurityEventLog },
 
     // Adaptador para o módulo Identity
     {
@@ -766,18 +782,24 @@ import { DeletePermissionUseCase } from './application/use-cases/delete-permissi
         OrganizationRepository,
         AuthorizationSnapshotPort,
         UserDirectoryPort,
+        AuthorizationDecisionLog,
+        ClockPort,
       ],
       useFactory: (
         integrationClients: IntegrationClientRepository,
         organizations: OrganizationRepository,
         snapshots: AuthorizationSnapshotPort,
         users: UserDirectoryPort,
+        decisions: AuthorizationDecisionLog,
+        clock: ClockPort,
       ) =>
         new AuthorizeForIntegrationUseCase(
           integrationClients,
           organizations,
           snapshots,
           users,
+          decisions,
+          clock,
         ),
     },
     {
@@ -789,6 +811,50 @@ import { DeletePermissionUseCase } from './application/use-cases/delete-permissi
         access: OrganizationAccessService,
       ) => new ListAuditEventsUseCase(audit, users, access),
     },
+    {
+      provide: ListAuthorizationDecisionsUseCase,
+      inject: [
+        AuthorizationDecisionLog,
+        UserDirectoryPort,
+        OrganizationAccessService,
+      ],
+      useFactory: (
+        decisions: AuthorizationDecisionLog,
+        users: UserDirectoryPort,
+        access: OrganizationAccessService,
+      ) => new ListAuthorizationDecisionsUseCase(decisions, users, access),
+    },
+    {
+      provide: ListSecurityEventsUseCase,
+      inject: [SecurityEventLog, UserDirectoryPort, OrganizationAccessService],
+      useFactory: (
+        securityEvents: SecurityEventLog,
+        users: UserDirectoryPort,
+        access: OrganizationAccessService,
+      ) => new ListSecurityEventsUseCase(securityEvents, users, access),
+    },
+    // Usado pelo filtro global, que grava as negações.
+    {
+      provide: SecurityDenialRecorder,
+      inject: [
+        SecurityEventLog,
+        UserDirectoryPort,
+        IntegrationClientRepository,
+        ClockPort,
+      ],
+      useFactory: (
+        securityEvents: SecurityEventLog,
+        users: UserDirectoryPort,
+        integrationClients: IntegrationClientRepository,
+        clock: ClockPort,
+      ) =>
+        new SecurityEventRecorder(
+          securityEvents,
+          users,
+          integrationClients,
+          clock,
+        ),
+    },
 
     // Apresentação
     OrganizationsResolver,
@@ -797,6 +863,9 @@ import { DeletePermissionUseCase } from './application/use-cases/delete-permissi
     RolesResolver,
     PermissionsResolver,
     AuditResolver,
+    AuthorizationDecisionsResolver,
+    SecurityEventsResolver,
   ],
+  exports: [SecurityDenialRecorder],
 })
 export class OrganizationsModule {}

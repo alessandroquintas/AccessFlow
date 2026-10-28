@@ -204,6 +204,8 @@ model AuditEvent {
   targetId       String         @map("target_id")
   details        Json
   occurredAt     DateTime       @map("occurred_at") @db.Timestamptz(3)
+  // X-Request-Id da requisição que gerou o evento; nulo fora de requisição.
+  requestId      String?        @map("request_id")
 
   organization Organization @relation(fields: [organizationId], references: [id], onDelete: Restrict)
   actorUser    User?        @relation(fields: [actorUserId], references: [id], onDelete: Restrict)
@@ -211,4 +213,54 @@ model AuditEvent {
   // Listagem da organização, do mais recente para o mais antigo.
   @@index([organizationId, occurredAt(sort: Desc), id(sort: Desc)])
   @@map("audit_events")
+}
+
+// Cada resposta 200 do POST /v1/authorize. O CHECK do results e o da
+// coerência do allowed estão na migration.
+model AuthorizationDecision {
+  id             String   @id @default(uuid()) @db.Uuid
+  // Sem FK: o KEY SHARE da FK faria o authorize esperar qualquer ação
+  // administrativa em andamento na organização (motivo na migration).
+  organizationId String   @map("organization_id") @db.Uuid
+  // Sem FK: o registro fica mesmo que a integração deixe de existir.
+  clientId       String   @map("client_id")
+  // Sem FK: o sujeito pode nem existir como usuário.
+  subjectUserId  String   @map("subject_user_id") @db.Uuid
+  // [{ permission, allowed }], na ordem do pedido.
+  results        Json
+  allowed        Boolean
+  requestId      String?  @map("request_id")
+  decidedAt      DateTime @map("decided_at") @db.Timestamptz(3)
+
+  // Listagem da organização, da mais recente para a mais antiga.
+  @@index([organizationId, decidedAt(sort: Desc), id(sort: Desc)])
+  // O mesmo, filtrado por sujeito ("por que fulano foi negado?").
+  @@index([organizationId, subjectUserId, decidedAt(sort: Desc), id(sort: Desc)], map: "authorization_decisions_organization_id_subject_user_id_idx")
+  @@map("authorization_decisions")
+}
+
+enum SecurityActorType {
+  USER
+  MACHINE
+}
+
+// Tentativas de acesso negadas. Sem FK em nenhuma coluna (motivo na
+// migration). O CHECK de coerência do ator e o do details estão na
+// migration. event é texto, validado no código.
+model SecurityEvent {
+  id             String            @id @default(uuid()) @db.Uuid
+  // Nulo em evento de máquina de client não cadastrado.
+  organizationId String?           @map("organization_id") @db.Uuid
+  actorType      SecurityActorType @map("actor_type")
+  actorUserId    String?           @map("actor_user_id") @db.Uuid
+  actorClientId  String?           @map("actor_client_id")
+  event          String
+  details        Json
+  // X-Request-Id da requisição negada; nulo fora de requisição.
+  requestId      String?           @map("request_id")
+  occurredAt     DateTime          @map("occurred_at") @db.Timestamptz(3)
+
+  // Listagem da organização, do mais recente para o mais antigo.
+  @@index([organizationId, occurredAt(sort: Desc), id(sort: Desc)])
+  @@map("security_events")
 }

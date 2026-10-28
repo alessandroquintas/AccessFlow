@@ -40,11 +40,17 @@ export class MachineAuthGuard implements CanActivate {
       this.logger.warn(
         `Rota ${context.getClass().name}.${context.getHandler().name} usa MachineAuthGuard sem @RequireScopes: acesso negado.`,
       );
-      throw new InsufficientScopeError();
+      throw new InsufficientScopeError({
+        clientId: machine.clientId,
+        requiredScopes: [],
+      });
     }
 
     if (!required.every((scope) => machine.scopes.includes(scope))) {
-      throw new InsufficientScopeError();
+      throw new InsufficientScopeError({
+        clientId: machine.clientId,
+        requiredScopes: required,
+      });
     }
 
     request.machine = machine;

@@ -6,7 +6,8 @@ import { PrivilegeEscalationError } from '../domain/errors/privilege-escalation.
  * permissões que tem. P(viewer) é o que o papel de quem age concede
  * (Role.grants): o OWNER tem todas, inclusive as que ainda não existem no
  * catálogo. Por isso o papel OWNER, como alvo, só é coberto por outro
- * OWNER. Toda violação lança PrivilegeEscalationError.
+ * OWNER. Toda violação lança PrivilegeEscalationError, com a organização do
+ * papel de quem age.
  */
 
 /** createRole: as permissões do papel novo ⊆ P(viewer). */
@@ -51,13 +52,15 @@ export function ensureCanInviteWithRole(viewer: Role, role: Role): void {
 function ensureCovers(viewer: Role, role: Role): void {
   // As permissões do OWNER não são uma lista: só outro OWNER tem todas.
   if (role.isOwner() && !viewer.isOwner()) {
-    throw new PrivilegeEscalationError();
+    throw new PrivilegeEscalationError(viewer.organizationId);
   }
   ensureGrantsAll(viewer, role.permissions);
 }
 
 function ensureGrantsAll(viewer: Role, permissions: Iterable<string>): void {
   for (const permission of permissions) {
-    if (!viewer.grants(permission)) throw new PrivilegeEscalationError();
+    if (!viewer.grants(permission)) {
+      throw new PrivilegeEscalationError(viewer.organizationId);
+    }
   }
 }

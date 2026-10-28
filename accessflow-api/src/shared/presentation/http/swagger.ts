@@ -17,7 +17,9 @@ export function setupSwagger(app: INestApplication, env: EnvService): void {
     .setTitle('AccessFlow API — Integrações')
     .setDescription(
       'Rotas REST para sistemas externos vinculados a uma organização. ' +
-        'Cada rota exige um token de máquina com o escopo indicado nela.',
+        'Cada rota exige um token de máquina com o escopo indicado nela. ' +
+        'Toda resposta traz o cabeçalho `X-Request-Id`: o enviado pelo ' +
+        'cliente, se casar com `^[A-Za-z0-9._-]{8,64}$`, ou um UUID gerado.',
     )
     .setVersion('v1')
     // Sem OAuth2 no Swagger UI: o client_secret nunca vai para o navegador.

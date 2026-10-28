@@ -70,7 +70,9 @@ export class IntegrationMembersController {
   })
   @ApiInternalServerErrorResponse({
     type: ApiErrorResponse,
-    description: 'Erro inesperado. Os detalhes ficam só no log do servidor.',
+    description:
+      'Erro inesperado. Os detalhes ficam só no log do servidor, achados ' +
+      'pelo `requestId` do corpo.',
   })
   async getMember(
     @CurrentMachine() machine: AuthenticatedMachine,

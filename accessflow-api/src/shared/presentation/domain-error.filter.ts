@@ -1,18 +1,21 @@
 import { DomainError } from '@/shared/domain/errors/domain.error';
 import { InvalidJsonError } from '@/shared/application/errors/invalid-json.error';
+import { RequestContextPort } from '@/shared/application/ports/request-context.port';
 import {
   ArgumentsHost,
   BadRequestException,
   Catch,
   HttpException,
-  HttpServer,
   HttpStatus,
   IntrinsicException,
   Logger,
+  Optional,
 } from '@nestjs/common';
+import type { HttpServer } from '@nestjs/common';
 import { BaseExceptionFilter } from '@nestjs/core';
 import { GqlContextType } from '@nestjs/graphql';
 import { GraphQLError } from 'graphql/error';
+import { REQUEST_ID_HEADER, resolveRequestId } from './http/request-id';
 
 interface ErrorOutput {
   /** Código textual: `extensions.code` no GraphQL e `error.code` no HTTP. */
@@ -114,11 +117,20 @@ function isInvalidJsonBody(
  * Traduz DomainError para GraphQL e HTTP. Em HTTP também mascara erros
  * inesperados e responde JSON inválido no formato padrão; as demais
  * HttpException do Nest (ex.: rota inexistente) seguem o padrão do Nest.
+ * O erro inesperado vai para o log com o id de correlação da requisição.
  */
 @Catch()
 export class DomainErrorFilter extends BaseExceptionFilter {
   // Mesmo contexto de log que o Nest usa quando não há filtro.
   private readonly logger = new Logger('ExceptionsHandler');
+
+  constructor(
+    private readonly requestContext: RequestContextPort,
+    // Só os testes passam; na aplicação o Nest injeta o HttpAdapterHost.
+    @Optional() applicationRef?: HttpServer,
+  ) {
+    super(applicationRef);
+  }
 
   catch(exception: unknown, host: ArgumentsHost) {
     if (host.getType<GqlContextType>() === 'graphql') {
@@ -143,26 +155,24 @@ export class DomainErrorFilter extends BaseExceptionFilter {
       exception instanceof Error &&
       !(exception instanceof IntrinsicException)
     ) {
-      this.logger.error(exception);
+      this.logUnexpected(exception, this.requestContext.requestId());
     }
     throw exception;
   }
 
   private catchHttp(exception: unknown, host: ArgumentsHost): void {
     const http = host.switchToHttp();
+    const request = http.getRequest<IncomingRequest | undefined>();
+    const response = http.getResponse<unknown>();
+    const requestId = this.requestIdFor(request, response);
     // Sem o texto do parser: ele repete pedaços do corpo recebido.
-    const error = isInvalidJsonBody(
-      exception,
-      http.getRequest<IncomingRequest | undefined>(),
-    )
+    const error = isInvalidJsonBody(exception, request)
       ? new InvalidJsonError()
       : exception;
 
     if (error instanceof HttpException || this.isHttpError(error)) {
       return super.catch(error, host);
     }
-
-    const response = http.getResponse<unknown>();
 
     if (error instanceof DomainError) {
       const { code, status } = outputFor(error);
@@ -178,17 +188,48 @@ export class DomainErrorFilter extends BaseExceptionFilter {
       return;
     }
 
-    this.logger.error(error);
+    this.logUnexpected(error, requestId);
     this.httpAdapter.reply(
       response,
       {
         error: {
           code: 'INTERNAL_SERVER_ERROR',
           message: 'Erro interno do servidor.',
+          requestId,
         },
       },
       HttpStatus.INTERNAL_SERVER_ERROR,
     );
+  }
+
+  /**
+   * O id aberto pelo RequestIdMiddleware. O erro anterior a ele (corpo que o
+   * body-parser recusou) chega sem contexto: o id sai do cabeçalho aqui, pela
+   * mesma regra, para essa resposta também levar o X-Request-Id.
+   */
+  private requestIdFor(
+    request: IncomingRequest | undefined,
+    response: unknown,
+  ): string {
+    const current = this.requestContext.requestId();
+    if (current) return current;
+
+    const requestId = resolveRequestId(
+      request?.headers?.[REQUEST_ID_HEADER.toLowerCase()],
+    );
+    if (!this.httpAdapter.isHeadersSent(response)) {
+      this.httpAdapter.setHeader(response, REQUEST_ID_HEADER, requestId);
+    }
+    return requestId;
+  }
+
+  /**
+   * O id em mensagem própria, antes do erro: com o erro como último argumento,
+   * o ConsoleLogger continua imprimindo-o inteiro (com a pilha) e mantém o
+   * contexto ExceptionsHandler. Uma string no fim viraria o contexto.
+   */
+  private logUnexpected(error: unknown, requestId: string | undefined): void {
+    this.logger.error(`requestId=${requestId ?? '-'}`, error);
   }
 
   private get httpAdapter(): HttpServer {

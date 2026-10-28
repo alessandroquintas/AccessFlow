@@ -19,8 +19,15 @@ export interface AuditEventFilter {
   occurredTo?: Date;
 }
 
+/** O evento como foi gravado, com o id de correlação da requisição. */
+export interface RecordedAuditEvent {
+  event: AuditEvent;
+  /** X-Request-Id da requisição que gravou o evento; null fora de uma. */
+  requestId: string | null;
+}
+
 export interface AuditEventPage {
-  items: AuditEvent[];
+  items: RecordedAuditEvent[];
   hasNextPage: boolean;
 }
 
@@ -29,7 +36,8 @@ export abstract class AuditLog {
   /**
    * Grava o evento. Chamar dentro do TransactionManager.run da ação, depois
    * da escrita principal: se a gravação falhar, a ação é desfeita, e
-   * vice-versa.
+   * vice-versa. O id de correlação vem da requisição em andamento, e não do
+   * evento: é dado da requisição.
    */
   abstract record(event: AuditEvent): Promise<void>;
 

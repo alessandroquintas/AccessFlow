@@ -39,6 +39,11 @@ type AuditEvent {
   details: String!
   id: ID!
   occurredAt: DateTime!
+
+  """
+  X-Request-Id da requisição que gerou o registro; nulo se ela não tinha um. Serve para achar os logs dela. Pode ter vindo do cliente: não é único e não prova nada.
+  """
+  requestId: String
   target: AuditTarget!
 }
 
@@ -71,6 +76,57 @@ type AuditTarget {
 
   """organization, member, invitation, role ou permission."""
   type: String!
+}
+
+type AuthorizationDecision {
+  """true só se todas as chaves foram permitidas."""
+  allowed: Boolean!
+
+  """client_id da integração que perguntou."""
+  clientId: String!
+  decidedAt: DateTime!
+  id: ID!
+
+  """
+  X-Request-Id da requisição que gerou o registro; nulo se ela não tinha um. Serve para achar os logs dela. Pode ter vindo do cliente: não é único e não prova nada.
+  """
+  requestId: String
+
+  """Na ordem do pedido, sem as repetidas."""
+  results: [AuthorizationDecisionResult!]!
+
+  """Sobre quem se perguntou; pode nem existir como usuário."""
+  subjectUserId: ID!
+}
+
+type AuthorizationDecisionConnection {
+  nodes: [AuthorizationDecision!]!
+  pageInfo: PageInfo!
+}
+
+input AuthorizationDecisionFilter {
+  """true: tudo permitido; false: alguma chave negada."""
+  allowed: Boolean
+  clientId: String
+
+  """Inclusive. Depois de decidedTo responde BAD_REQUEST."""
+  decidedFrom: DateTime
+
+  """Inclusive."""
+  decidedTo: DateTime
+
+  """
+  Decisões em que esta chave estava entre as pedidas, permitida ou não. Fora do formato recurso:ação responde BAD_REQUEST.
+  """
+  permission: String
+  subjectUserId: ID
+}
+
+type AuthorizationDecisionResult {
+  allowed: Boolean!
+
+  """Chave pedida, no formato recurso:ação."""
+  permission: String!
 }
 
 input CreateOrganizationInput {
@@ -344,6 +400,11 @@ type Query {
   """
   auditEvents(after: String, filter: AuditEventFilter, first: Int, organizationId: ID!): AuditEventConnection!
 
+  """
+  Respostas 200 do POST /v1/authorize na organização, da mais recente para a mais antiga. Exige audit:read.
+  """
+  authorizationDecisions(after: String, filter: AuthorizationDecisionFilter, first: Int, organizationId: ID!): AuthorizationDecisionConnection!
+
   """Perfil do usuário autenticado."""
   me: User!
 
@@ -381,6 +442,11 @@ type Query {
 
   """Catálogo das permissões que um papel pode ter."""
   permissionCatalog: [PermissionDefinition!]!
+
+  """
+  Tentativas de acesso negadas na organização, da mais recente para a mais antiga: membros sem permissão e integrações dela sem escopo ou fora do vínculo. Exige audit:read.
+  """
+  securityEvents(after: String, filter: SecurityEventFilter, first: Int, organizationId: ID!): SecurityEventConnection!
 }
 
 type RoleSummary {
@@ -395,6 +461,66 @@ type RoleSummary {
 enum RoleSystemKey {
   MEMBER
   OWNER
+}
+
+enum SecurityActorType {
+  MACHINE
+  USER
+}
+
+type SecurityEvent {
+  actor: SecurityEventActor!
+
+  """
+  Detalhes como JSON serializado (um objeto): operation e permission nos eventos access.*, route e requiredScopes nos machine.*. Sem e-mail nem nome de pessoa.
+  """
+  details: String!
+
+  """
+  access.forbidden, access.privilege_escalation, machine.scope_denied ou machine.organization_denied.
+  """
+  event: String!
+  id: ID!
+  occurredAt: DateTime!
+
+  """
+  X-Request-Id da requisição que gerou o registro; nulo se ela não tinha um. Serve para achar os logs dela. Pode ter vindo do cliente: não é único e não prova nada.
+  """
+  requestId: String
+}
+
+type SecurityEventActor {
+  """client_id da integração, quando MACHINE."""
+  clientId: String
+
+  """Nome atual do usuário; nulo se o perfil não for encontrado."""
+  name: String
+  type: SecurityActorType!
+
+  """Preenchido quando USER."""
+  userId: ID
+}
+
+type SecurityEventConnection {
+  nodes: [SecurityEvent!]!
+  pageInfo: PageInfo!
+}
+
+input SecurityEventFilter {
+  """client_id da integração."""
+  actorClientId: String
+  actorUserId: ID
+
+  """
+  Qualquer um destes eventos. Evento fora do catálogo responde BAD_REQUEST; lista vazia não filtra.
+  """
+  events: [String!]
+
+  """Inclusive. Depois de occurredTo responde BAD_REQUEST."""
+  occurredFrom: DateTime
+
+  """Inclusive."""
+  occurredTo: DateTime
 }
 
 input UpdateMyProfileInput {

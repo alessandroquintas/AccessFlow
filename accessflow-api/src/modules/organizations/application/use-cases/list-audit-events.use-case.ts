@@ -60,7 +60,7 @@ export class ListAuditEventsUseCase {
     });
 
     // Os nomes da página numa consulta só.
-    const actorIds = page.items.flatMap(({ actor }) =>
+    const actorIds = page.items.flatMap(({ event: { actor } }) =>
       actor.type === AuditActorType.USER ? [actor.userId] : [],
     );
     const profiles =
@@ -70,8 +70,9 @@ export class ListAuditEventsUseCase {
     const nameById = new Map(profiles.map((p) => [p.id, p.name]));
 
     return {
-      items: page.items.map((event) => ({
+      items: page.items.map(({ event, requestId }) => ({
         event,
+        requestId,
         actorName:
           event.actor.type === AuditActorType.USER
             ? (nameById.get(event.actor.userId) ?? null)

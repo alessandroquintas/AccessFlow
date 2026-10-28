@@ -1,6 +1,7 @@
 import { Injectable } from '@nestjs/common';
 import { Prisma, type AuditEvent as PrismaAuditEvent } from '@prisma/client';
 import { PrismaClientProvider } from '@/shared/infrastructure/database/prisma-client.provider';
+import { RequestContextPort } from '@/shared/application/ports/request-context.port';
 import { AuditEvent } from '@/modules/organizations/domain/entities/audit-event.entity';
 import {
   AuditEventCursor,
@@ -12,14 +13,20 @@ import { PrismaAuditEventMapper } from './mappers/prisma-audit-event.mapper';
 
 @Injectable()
 export class PrismaAuditLogRepository extends AuditLog {
-  constructor(private readonly clients: PrismaClientProvider) {
+  constructor(
+    private readonly clients: PrismaClientProvider,
+    private readonly requestContext: RequestContextPort,
+  ) {
     super();
   }
 
   async record(event: AuditEvent): Promise<void> {
     // Na transação ativa, se houver: o evento e a ação vão juntos.
     await this.clients.current().auditEvent.create({
-      data: PrismaAuditEventMapper.toPersistence(event),
+      data: {
+        ...PrismaAuditEventMapper.toPersistence(event),
+        requestId: this.requestContext.requestId() ?? null,
+      },
     });
   }
 
@@ -55,14 +62,18 @@ export class PrismaAuditLogRepository extends AuditLog {
              target_type AS "targetType",
              target_id AS "targetId",
              details,
-             occurred_at AS "occurredAt"
+             occurred_at AS "occurredAt",
+             request_id AS "requestId"
       FROM audit_events
       WHERE ${Prisma.join(conditions, ' AND ')}
       ORDER BY occurred_at DESC, id DESC
       LIMIT ${first + 1}`;
 
     return {
-      items: records.slice(0, first).map(PrismaAuditEventMapper.toDomain),
+      items: records.slice(0, first).map((record) => ({
+        event: PrismaAuditEventMapper.toDomain(record),
+        requestId: record.requestId,
+      })),
       hasNextPage: records.length > first,
     };
   }

@@ -56,7 +56,10 @@ export class OrganizationAccessService {
     const context = await this.requireMember(organizationId, userId);
 
     if (!context.role.grants(permission)) {
-      throw new OrganizationPermissionDeniedError();
+      throw new OrganizationPermissionDeniedError({
+        organizationId,
+        permission,
+      });
     }
 
     return context;

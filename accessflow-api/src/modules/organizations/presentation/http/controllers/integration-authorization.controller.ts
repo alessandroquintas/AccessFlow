@@ -60,7 +60,10 @@ export class IntegrationAuthorizationController {
       'O client só enxerga a organização à qual está vinculado: qualquer ' +
       'outra, mesmo existente, responde 404. Quem não é membro ativo (ou tem ' +
       'a conta desativada) recebe 200 com tudo false, igual a um membro sem ' +
-      'as permissões.',
+      'as permissões. Toda resposta 200 é registrada (client, usuário, chaves ' +
+      'pedidas e resultado) e pode ser lida pela query GraphQL ' +
+      '`authorizationDecisions`. Falha fechada: se o registro não puder ser ' +
+      'gravado, a resposta é 500, nunca uma decisão sem registro.',
   })
   @ApiBody({
     type: AuthorizeRequest,
@@ -148,7 +151,10 @@ export class IntegrationAuthorizationController {
   })
   @ApiInternalServerErrorResponse({
     type: ApiErrorResponse,
-    description: 'Erro inesperado. Os detalhes ficam só no log do servidor.',
+    description:
+      'Erro inesperado, inclusive falha ao registrar a decisão: sem registro, ' +
+      'não há decisão (falha fechada). Os detalhes ficam só no log do ' +
+      'servidor, achados pelo `requestId` do corpo.',
   })
   async authorize(
     @CurrentMachine() machine: AuthenticatedMachine,

@@ -1,6 +1,7 @@
 import { AuditEventEntry } from '@/modules/organizations/application/dto/audit-event-entry';
 import { AuditActorType } from '@/modules/organizations/domain/entities/audit-event.entity';
 import { Field, ID, ObjectType, registerEnumType } from '@nestjs/graphql';
+import { REQUEST_ID_DESCRIPTION } from '@/shared/presentation/graphql/request-id-field';
 
 registerEnumType(AuditActorType, {
   name: 'AuditActorType',
@@ -64,7 +65,17 @@ export class AuditEventGqlType {
   })
   details!: string;
 
-  static from({ event, actorName }: AuditEventEntry): AuditEventGqlType {
+  @Field(() => String, {
+    nullable: true,
+    description: REQUEST_ID_DESCRIPTION,
+  })
+  requestId!: string | null;
+
+  static from({
+    event,
+    actorName,
+    requestId,
+  }: AuditEventEntry): AuditEventGqlType {
     const { actor } = event;
     const type = new AuditEventGqlType();
     type.id = event.id;
@@ -78,6 +89,7 @@ export class AuditEventGqlType {
     };
     type.target = { type: event.target.type, id: event.target.id };
     type.details = JSON.stringify(event.details);
+    type.requestId = requestId;
     return type;
   }
 }

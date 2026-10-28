@@ -33,10 +33,11 @@ export class CheckMembershipForIntegrationUseCase {
     const userId = input.userId.toLowerCase();
 
     // Acesso primeiro: client desconhecido, revogado ou de outra organização
-    // recebe a mesma resposta de organização inexistente.
+    // recebe a mesma resposta de organização inexistente, e a negação vira
+    // evento de segurança.
     const client = await this.integrationClients.findByClientId(input.clientId);
     if (!client?.isActive() || client.organizationId !== organizationId) {
-      throw new OrganizationNotFoundError();
+      throw OrganizationNotFoundError.outsideClientBinding(input.clientId);
     }
 
     if (!isUuid(organizationId)) throw new OrganizationNotFoundError();

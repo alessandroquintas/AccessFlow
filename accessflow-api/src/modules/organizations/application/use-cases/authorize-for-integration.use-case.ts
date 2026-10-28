@@ -1,6 +1,9 @@
 import { isUuid } from '@/shared/domain/uuid';
+import { ClockPort } from '@/shared/application/ports/clock.port';
+import { AuthorizationDecision } from '../../domain/entities/authorization-decision.entity';
 import { InvalidPermissionKeyError } from '../../domain/errors/invalid-permission-key.error';
 import { OrganizationNotFoundError } from '../../domain/errors/organization-not-found.error';
+import { AuthorizationDecisionLog } from '../../domain/repositories/authorization-decision-log.repository';
 import { IntegrationClientRepository } from '../../domain/repositories/integration-client.repository';
 import { OrganizationRepository } from '../../domain/repositories/organization.repository';
 import { PermissionKey } from '../../domain/value-objects/permission-key.vo';
@@ -28,11 +31,14 @@ export class AuthorizeForIntegrationUseCase {
     private readonly organizations: OrganizationRepository,
     private readonly snapshots: AuthorizationSnapshotPort,
     private readonly users: UserDirectoryPort,
+    private readonly decisions: AuthorizationDecisionLog,
+    private readonly clock: ClockPort,
   ) {}
 
   /**
    * Não membro, membro removido e conta desativada recebem a mesma resposta
-   * de membro sem a permissão: tudo false. Sem trava: só leitura.
+   * de membro sem a permissão: tudo false. Sem trava: só leituras e, no fim,
+   * o registro da decisão.
    */
   async execute(
     input: AuthorizeForIntegrationInput,
@@ -52,10 +58,11 @@ export class AuthorizeForIntegrationUseCase {
     const permissions = parseRequestedPermissions(input.permissions);
 
     // Acesso: a mesma regra do GET de membros. Client desconhecido, revogado
-    // ou de outra organização recebe a resposta de organização inexistente.
+    // ou de outra organização recebe a resposta de organização inexistente,
+    // e a negação vira evento de segurança.
     const client = await this.integrationClients.findByClientId(input.clientId);
     if (!client?.isActive() || client.organizationId !== organizationId) {
-      throw new OrganizationNotFoundError();
+      throw OrganizationNotFoundError.outsideClientBinding(input.clientId);
     }
     const organization = await this.organizations.findById(organizationId);
     if (!organization?.isActive()) throw new OrganizationNotFoundError();
@@ -81,10 +88,23 @@ export class AuthorizeForIntegrationUseCase {
       permissions,
     );
 
+    // Falha fechada: se o registro não for gravado, o erro sobe e a resposta
+    // é o 500, nunca uma decisão sem registro.
+    const decision = AuthorizationDecision.create(
+      {
+        organizationId,
+        clientId: input.clientId,
+        subjectUserId: userId,
+        results,
+      },
+      this.clock.now(),
+    );
+    await this.decisions.record(decision);
+
     return {
       organizationId,
       userId,
-      allowed: results.every((result) => result.allowed),
+      allowed: decision.allowed,
       results,
     };
   }
