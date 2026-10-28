@@ -14,7 +14,10 @@ import { PrismaRoleRepository } from '@/modules/organizations/infrastructure/per
 import { PrismaOrganizationRepository } from '@/modules/organizations/infrastructure/persistence/prisma-organization.repository';
 import { PrismaMembershipRepository } from '@/modules/organizations/infrastructure/persistence/prisma-membership.repository';
 import { PrismaInvitationMapper } from '@/modules/organizations/infrastructure/persistence/mappers/prisma-invitation.mapper';
-import { OrganizationPermission } from '@/modules/organizations/policies/organization-permission';
+import {
+  PermissionCatalog,
+  OrganizationPermission,
+} from '@/modules/organizations/policies/organization-permission';
 import {
   SeededOrganization,
   seedMembership,
@@ -251,7 +254,11 @@ describe('PrismaRoleRepository (integração)', () => {
     });
 
     function custom(name: string, permissions: string[]): Role {
-      return Role.create({ organizationId: acme.id, name, permissions }, NOW);
+      return Role.create(
+        { organizationId: acme.id, name, permissions },
+        PermissionCatalog.system(),
+        NOW,
+      );
     }
 
     async function permissionRows(roleId: string) {
@@ -327,7 +334,11 @@ describe('PrismaRoleRepository (integração)', () => {
       });
 
       finance.rename('Contas a Pagar', LATER);
-      finance.setPermissions([MEMBERS_INVITE, ROLES_READ], LATER);
+      finance.setPermissions(
+        [MEMBERS_INVITE, ROLES_READ],
+        PermissionCatalog.system(),
+        LATER,
+      );
       await roles.save(finance);
 
       expect(
@@ -355,7 +366,7 @@ describe('PrismaRoleRepository (integração)', () => {
       const finance = custom('Financeiro', [MEMBERS_READ, MEMBERS_REMOVE]);
       await roles.create(finance);
 
-      finance.setPermissions([], LATER);
+      finance.setPermissions([], PermissionCatalog.system(), LATER);
       await roles.save(finance);
 
       expect(await permissionRows(finance.id)).toEqual([]);

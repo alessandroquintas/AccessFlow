@@ -74,6 +74,17 @@ export class InMemoryRoleRepository extends RoleRepository {
     );
   }
 
+  /** Tira permissões de um papel gravado, sem as regras da edição. */
+  revoke(roleId: string, ...permissions: string[]): void {
+    const role = this.rows.get(roleId)!;
+    this.rows.set(
+      roleId,
+      copy(role, {
+        permissions: role.permissions.filter((p) => !permissions.includes(p)),
+      }),
+    );
+  }
+
   async findById(organizationId: string, id: string): Promise<Role | null> {
     return (
       this.items.find(

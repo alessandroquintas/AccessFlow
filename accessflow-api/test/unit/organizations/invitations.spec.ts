@@ -11,7 +11,10 @@ import {
   Role,
   RoleSystemKey,
 } from '@/modules/organizations/domain/entities/role.entity';
-import { OrganizationPermission } from '@/modules/organizations/policies/organization-permission';
+import {
+  OrganizationPermission,
+  PermissionCatalog,
+} from '@/modules/organizations/policies/organization-permission';
 import {
   Invitation,
   InvitationStatus,
@@ -102,6 +105,7 @@ function seedCustomRole(
 ): Role {
   const role = Role.create(
     { organizationId: organization.id, name, permissions },
+    PermissionCatalog.system(),
     START,
   );
   roles.seed(role);

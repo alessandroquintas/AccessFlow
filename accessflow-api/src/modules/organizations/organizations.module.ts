@@ -37,6 +37,8 @@ import { DeclineInvitationUseCase } from './application/use-cases/decline-invita
 import { InvitationsResolver } from './presentation/graphql/resolvers/invitations.resolver';
 import { RoleRepository } from './domain/repositories/role.repository';
 import { PrismaRoleRepository } from './infrastructure/persistence/prisma-role.repository';
+import { CustomPermissionRepository } from './domain/repositories/custom-permission.repository';
+import { PrismaCustomPermissionRepository } from './infrastructure/persistence/prisma-custom-permission.repository';
 import { TransactionManager } from '@/shared/application/ports/transaction-manager.port';
 import { ListOrganizationRolesUseCase } from './application/use-cases/list-organization-roles.use-case';
 import { GetMyPermissionsUseCase } from './application/use-cases/get-my-permissions.use-case';
@@ -46,10 +48,23 @@ import { DeleteRoleUseCase } from './application/use-cases/delete-role.use-case'
 import { AssignRoleUseCase } from './application/use-cases/assign-role.use-case';
 import { CountMembersByRoleUseCase } from './application/use-cases/count-members-by-role.use-case';
 import { RolesResolver } from './presentation/graphql/resolvers/roles.resolver';
+import { PermissionsResolver } from './presentation/graphql/resolvers/permissions.resolver';
+import { IntegrationAuthorizationController } from './presentation/http/controllers/integration-authorization.controller';
+import { AuthorizeForIntegrationUseCase } from './application/use-cases/authorize-for-integration.use-case';
+import { AuthorizationSnapshotPort } from './application/ports/authorization-snapshot.port';
+import { PrismaAuthorizationSnapshotReader } from './infrastructure/persistence/prisma-authorization-snapshot.reader';
+import { GetPermissionCatalogUseCase } from './application/use-cases/get-permission-catalog.use-case';
+import { ListOrganizationPermissionsUseCase } from './application/use-cases/list-organization-permissions.use-case';
+import { CreatePermissionUseCase } from './application/use-cases/create-permission.use-case';
+import { UpdatePermissionUseCase } from './application/use-cases/update-permission.use-case';
+import { DeletePermissionUseCase } from './application/use-cases/delete-permission.use-case';
 
 @Module({
   imports: [PrismaModule, IdentityModule, ClockModule],
-  controllers: [IntegrationMembersController],
+  controllers: [
+    IntegrationMembersController,
+    IntegrationAuthorizationController,
+  ],
   providers: [
     // Persistência
     { provide: OrganizationRepository, useClass: PrismaOrganizationRepository },
@@ -60,6 +75,14 @@ import { RolesResolver } from './presentation/graphql/resolvers/roles.resolver';
     },
     { provide: InvitationRepository, useClass: PrismaInvitationRepository },
     { provide: RoleRepository, useClass: PrismaRoleRepository },
+    {
+      provide: CustomPermissionRepository,
+      useClass: PrismaCustomPermissionRepository,
+    },
+    {
+      provide: AuthorizationSnapshotPort,
+      useClass: PrismaAuthorizationSnapshotReader,
+    },
 
     // Adaptador para o módulo Identity
     {
@@ -426,17 +449,23 @@ import { RolesResolver } from './presentation/graphql/resolvers/roles.resolver';
     },
     {
       provide: GetMyPermissionsUseCase,
-      inject: [UserDirectoryPort, OrganizationAccessService],
+      inject: [
+        CustomPermissionRepository,
+        UserDirectoryPort,
+        OrganizationAccessService,
+      ],
       useFactory: (
+        customPermissions: CustomPermissionRepository,
         users: UserDirectoryPort,
         access: OrganizationAccessService,
-      ) => new GetMyPermissionsUseCase(users, access),
+      ) => new GetMyPermissionsUseCase(customPermissions, users, access),
     },
     {
       provide: CreateRoleUseCase,
       inject: [
         OrganizationRepository,
         RoleRepository,
+        CustomPermissionRepository,
         UserDirectoryPort,
         OrganizationAccessService,
         TransactionManager,
@@ -445,6 +474,7 @@ import { RolesResolver } from './presentation/graphql/resolvers/roles.resolver';
       useFactory: (
         organizations: OrganizationRepository,
         roles: RoleRepository,
+        customPermissions: CustomPermissionRepository,
         users: UserDirectoryPort,
         access: OrganizationAccessService,
         transactions: TransactionManager,
@@ -453,6 +483,7 @@ import { RolesResolver } from './presentation/graphql/resolvers/roles.resolver';
         new CreateRoleUseCase(
           organizations,
           roles,
+          customPermissions,
           users,
           access,
           transactions,
@@ -465,6 +496,7 @@ import { RolesResolver } from './presentation/graphql/resolvers/roles.resolver';
         OrganizationRepository,
         RoleRepository,
         MembershipRepository,
+        CustomPermissionRepository,
         UserDirectoryPort,
         OrganizationAccessService,
         TransactionManager,
@@ -474,6 +506,7 @@ import { RolesResolver } from './presentation/graphql/resolvers/roles.resolver';
         organizations: OrganizationRepository,
         roles: RoleRepository,
         memberships: MembershipRepository,
+        customPermissions: CustomPermissionRepository,
         users: UserDirectoryPort,
         access: OrganizationAccessService,
         transactions: TransactionManager,
@@ -483,6 +516,7 @@ import { RolesResolver } from './presentation/graphql/resolvers/roles.resolver';
           organizations,
           roles,
           memberships,
+          customPermissions,
           users,
           access,
           transactions,
@@ -552,12 +586,136 @@ import { RolesResolver } from './presentation/graphql/resolvers/roles.resolver';
       useFactory: (memberships: MembershipRepository) =>
         new CountMembersByRoleUseCase(memberships),
     },
+    {
+      provide: GetPermissionCatalogUseCase,
+      inject: [CustomPermissionRepository],
+      useFactory: (customPermissions: CustomPermissionRepository) =>
+        new GetPermissionCatalogUseCase(customPermissions),
+    },
+    {
+      provide: ListOrganizationPermissionsUseCase,
+      inject: [
+        CustomPermissionRepository,
+        UserDirectoryPort,
+        OrganizationAccessService,
+      ],
+      useFactory: (
+        customPermissions: CustomPermissionRepository,
+        users: UserDirectoryPort,
+        access: OrganizationAccessService,
+      ) =>
+        new ListOrganizationPermissionsUseCase(
+          customPermissions,
+          users,
+          access,
+        ),
+    },
+    {
+      provide: CreatePermissionUseCase,
+      inject: [
+        OrganizationRepository,
+        CustomPermissionRepository,
+        UserDirectoryPort,
+        OrganizationAccessService,
+        TransactionManager,
+        ClockPort,
+      ],
+      useFactory: (
+        organizations: OrganizationRepository,
+        customPermissions: CustomPermissionRepository,
+        users: UserDirectoryPort,
+        access: OrganizationAccessService,
+        transactions: TransactionManager,
+        clock: ClockPort,
+      ) =>
+        new CreatePermissionUseCase(
+          organizations,
+          customPermissions,
+          users,
+          access,
+          transactions,
+          clock,
+        ),
+    },
+    {
+      provide: UpdatePermissionUseCase,
+      inject: [
+        OrganizationRepository,
+        CustomPermissionRepository,
+        UserDirectoryPort,
+        OrganizationAccessService,
+        TransactionManager,
+        ClockPort,
+      ],
+      useFactory: (
+        organizations: OrganizationRepository,
+        customPermissions: CustomPermissionRepository,
+        users: UserDirectoryPort,
+        access: OrganizationAccessService,
+        transactions: TransactionManager,
+        clock: ClockPort,
+      ) =>
+        new UpdatePermissionUseCase(
+          organizations,
+          customPermissions,
+          users,
+          access,
+          transactions,
+          clock,
+        ),
+    },
+    {
+      provide: DeletePermissionUseCase,
+      inject: [
+        OrganizationRepository,
+        CustomPermissionRepository,
+        UserDirectoryPort,
+        OrganizationAccessService,
+        TransactionManager,
+      ],
+      useFactory: (
+        organizations: OrganizationRepository,
+        customPermissions: CustomPermissionRepository,
+        users: UserDirectoryPort,
+        access: OrganizationAccessService,
+        transactions: TransactionManager,
+      ) =>
+        new DeletePermissionUseCase(
+          organizations,
+          customPermissions,
+          users,
+          access,
+          transactions,
+        ),
+    },
+    {
+      provide: AuthorizeForIntegrationUseCase,
+      inject: [
+        IntegrationClientRepository,
+        OrganizationRepository,
+        AuthorizationSnapshotPort,
+        UserDirectoryPort,
+      ],
+      useFactory: (
+        integrationClients: IntegrationClientRepository,
+        organizations: OrganizationRepository,
+        snapshots: AuthorizationSnapshotPort,
+        users: UserDirectoryPort,
+      ) =>
+        new AuthorizeForIntegrationUseCase(
+          integrationClients,
+          organizations,
+          snapshots,
+          users,
+        ),
+    },
 
     // Apresentação
     OrganizationsResolver,
     MembersResolver,
     InvitationsResolver,
     RolesResolver,
+    PermissionsResolver,
   ],
 })
 export class OrganizationsModule {}

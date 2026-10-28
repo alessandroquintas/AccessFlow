@@ -5,21 +5,18 @@ import { RoleSummaryType } from './role-summary.type';
 
 /**
  * O papel completo, com permissões e contagem. Só sai em operações de papel
- * (roles:read ou roles:manage) e no papel do próprio viewer. `memberCount` é
- * resolvido no RolesResolver.
+ * (roles:read ou roles:manage) e no papel do próprio viewer. `permissions` e
+ * `memberCount` são resolvidos no RolesResolver.
  */
 @ObjectType('OrganizationRole')
 export class OrganizationRoleType extends RoleSummaryType {
-  @Field(() => [String], {
-    description:
-      'Permissões efetivas, na ordem do catálogo. O OWNER tem o catálogo inteiro.',
-  })
-  permissions!: string[];
-
   @Field()
   createdAt!: Date;
 
-  /** Não exposto: para carregar o memberCount quando ele não veio pronto. */
+  /** Não exposto: o papel, para resolver as permissões efetivas. */
+  source!: Role;
+
+  /** Não exposto: para carregar o que não veio pronto do caso de uso. */
   organizationId!: string;
 
   /** Não exposto: o memberCount, quando o caso de uso já o calculou. */
@@ -30,8 +27,8 @@ export class OrganizationRoleType extends RoleSummaryType {
     type.id = role.id;
     type.name = role.name;
     type.systemKey = role.systemKey;
-    type.permissions = [...role.effectivePermissions()];
     type.createdAt = role.createdAt;
+    type.source = role;
     type.organizationId = role.organizationId;
     type.knownMemberCount = memberCount;
     return type;

@@ -2,6 +2,7 @@ import { ClockPort } from '@/shared/application/ports/clock.port';
 import { TransactionManager } from '@/shared/application/ports/transaction-manager.port';
 import { Role } from '../../domain/entities/role.entity';
 import { RoleLimitReachedError } from '../../domain/errors/role-limit-reached.error';
+import { CustomPermissionRepository } from '../../domain/repositories/custom-permission.repository';
 import { OrganizationRepository } from '../../domain/repositories/organization.repository';
 import { RoleRepository } from '../../domain/repositories/role.repository';
 import { OrganizationPermission } from '../../policies/organization-permission';
@@ -9,6 +10,7 @@ import { ensureCanCreateRole } from '../../policies/privilege-escalation';
 import { OrganizationRole } from '../dto/organization-role';
 import { UserDirectoryPort } from '../ports/user-directory.port';
 import { ensureRoleNameAvailable } from '../services/ensure-role-name-available';
+import { loadPermissionCatalog } from '../services/load-permission-catalog';
 import { OrganizationAccessService } from '../services/organization-access.service';
 
 export interface CreateRoleInput {
@@ -22,6 +24,7 @@ export class CreateRoleUseCase {
   constructor(
     private readonly organizations: OrganizationRepository,
     private readonly roles: RoleRepository,
+    private readonly customPermissions: CustomPermissionRepository,
     private readonly users: UserDirectoryPort,
     private readonly access: OrganizationAccessService,
     private readonly transactions: TransactionManager,
@@ -33,8 +36,9 @@ export class CreateRoleUseCase {
     const organizationId = input.organizationId.toLowerCase();
 
     const role = await this.transactions.run(async () => {
-      // Trava antes de checar: a permissão do autor, o nome livre e o limite
-      // valem até o commit, porque toda escrita de papel trava a organização.
+      // Trava antes de checar: a permissão do autor, o catálogo efetivo, o
+      // nome livre e o limite valem até o commit, porque toda escrita de
+      // papel e de permissão personalizada trava a organização.
       await this.organizations.lock(organizationId);
       const { role: actorRole } = await this.access.requirePermission(
         organizationId,
@@ -48,6 +52,7 @@ export class CreateRoleUseCase {
           name: input.name,
           permissions: input.permissions,
         },
+        await loadPermissionCatalog(this.customPermissions, organizationId),
         this.clock.now(),
       );
       ensureCanCreateRole(actorRole, role.permissions);

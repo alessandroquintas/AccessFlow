@@ -6,7 +6,10 @@ import {
   Role,
   RoleSystemKey,
 } from '@/modules/organizations/domain/entities/role.entity';
-import { OrganizationPermission } from '@/modules/organizations/policies/organization-permission';
+import {
+  OrganizationPermission,
+  PermissionCatalog,
+} from '@/modules/organizations/policies/organization-permission';
 import { OrganizationAccessService } from '@/modules/organizations/application/services/organization-access.service';
 import { CreateRoleUseCase } from '@/modules/organizations/application/use-cases/create-role.use-case';
 import { UpdateRoleUseCase } from '@/modules/organizations/application/use-cases/update-role.use-case';
@@ -30,6 +33,8 @@ import { InMemoryOrganizationRepository } from '@test/in-memory/organizations/in
 import { InMemoryMembershipRepository } from '@test/in-memory/organizations/in-memory-membership-repository';
 import { InMemoryRoleRepository } from '@test/in-memory/organizations/in-memory-role-repository';
 import { InMemoryInvitationRepository } from '@test/in-memory/organizations/in-memory-invitation-repository';
+import { InMemoryCustomPermissionRepository } from '@test/in-memory/organizations/in-memory-custom-permission-repository';
+import { CustomPermission } from '@/modules/organizations/domain/entities/custom-permission.entity';
 import { FakeUserDirectory } from '@test/fakes/organizations/fake-user-directory';
 import { FakeTransactionManager } from '@test/fakes/shared/fake-transaction-manager';
 import { FixedClock } from '@test/fakes/shared/fixed-clock';
@@ -63,6 +68,7 @@ let roles: InMemoryRoleRepository;
 let memberships: InMemoryMembershipRepository;
 let invitations: InMemoryInvitationRepository;
 let organizations: InMemoryOrganizationRepository;
+let customPermissions: InMemoryCustomPermissionRepository;
 let createRole: CreateRoleUseCase;
 let updateRole: UpdateRoleUseCase;
 let deleteRole: DeleteRoleUseCase;
@@ -86,8 +92,10 @@ function seedRole(
   permissions: string[],
   organization = acme,
 ): Role {
+  // Catálogo efetivo do cenário: aceita as personalizadas já gravadas.
   const role = Role.create(
     { organizationId: organization.id, name, permissions },
+    PermissionCatalog.withCustom(customPermissions.items.map((p) => p.key)),
     START,
   );
   roles.seed(role);
@@ -137,6 +145,7 @@ describe('Gestão de papéis', () => {
     memberships = new InMemoryMembershipRepository(roles);
     invitations = new InMemoryInvitationRepository(memberships);
     organizations = new InMemoryOrganizationRepository();
+    customPermissions = new InMemoryCustomPermissionRepository(roles);
     const users = new FakeUserDirectory();
     users.register(OWNER.sub, OWNER.id, { name: 'Olga' });
     users.register(MEMBER.sub, MEMBER.id, { name: 'Mário' });
@@ -152,6 +161,7 @@ describe('Gestão de papéis', () => {
     createRole = new CreateRoleUseCase(
       organizations,
       roles,
+      customPermissions,
       users,
       access,
       transactions,
@@ -161,6 +171,7 @@ describe('Gestão de papéis', () => {
       organizations,
       roles,
       memberships,
+      customPermissions,
       users,
       access,
       transactions,
@@ -189,7 +200,11 @@ describe('Gestão de papéis', () => {
       users,
       access,
     );
-    getMyPermissions = new GetMyPermissionsUseCase(users, access);
+    getMyPermissions = new GetMyPermissionsUseCase(
+      customPermissions,
+      users,
+      access,
+    );
 
     acme = createOrganization('acme');
     ownerRole = roles.systemRole(acme.id, RoleSystemKey.OWNER);
@@ -808,6 +823,107 @@ describe('Gestão de papéis', () => {
       await expect(permissionsOf(OUTSIDER)).rejects.toBeInstanceOf(
         OrganizationNotFoundError,
       );
+    });
+  });
+
+  describe('permissões personalizadas no catálogo efetivo', () => {
+    const APPROVE = 'invoices:approve';
+    const SIGN = 'contracts:sign';
+
+    function seedCustom(key: string, organization = acme) {
+      customPermissions.seed(
+        CustomPermission.create(
+          { organizationId: organization.id, key, description: key },
+          START,
+        ),
+      );
+    }
+
+    beforeEach(() => {
+      seedCustom(APPROVE);
+      seedCustom(SIGN);
+    });
+
+    it('createRole aceita personalizada da organização; de outra ou inexistente: INVALID_PERMISSION', async () => {
+      seedCustom('payments:refund', createOrganization('beta'));
+      const create = (name: string, permissions: string[]) =>
+        createRole.execute({
+          cognitoSub: OWNER.sub,
+          organizationId: acme.id,
+          name,
+          permissions,
+        });
+
+      const { role } = await create('Financeiro', [APPROVE, MEMBERS_READ]);
+      expect(stored(role.id)?.permissions).toEqual([MEMBERS_READ, APPROVE]);
+
+      for (const key of ['payments:refund', 'invoices:refund']) {
+        await expect(create(`Com ${key}`, [key])).rejects.toBeInstanceOf(
+          InvalidPermissionError,
+        );
+      }
+    });
+
+    it('updateRole concede e tira personalizada; a que saiu do catálogo não é aceita', async () => {
+      const finance = seedRole('Financeiro', [MEMBERS_READ]);
+      const update = (permissions: string[]) =>
+        updateRole.execute({
+          cognitoSub: OWNER.sub,
+          organizationId: acme.id,
+          roleId: finance.id,
+          permissions,
+        });
+
+      await update([APPROVE, SIGN]);
+      expect(stored(finance.id)?.permissions).toEqual([SIGN, APPROVE]);
+
+      await update([SIGN]);
+      expect(stored(finance.id)?.permissions).toEqual([SIGN]);
+
+      const approve = await customPermissions.findByKey(acme.id, APPROVE);
+      await customPermissions.delete(approve!);
+      await expect(update([APPROVE])).rejects.toBeInstanceOf(
+        InvalidPermissionError,
+      );
+    });
+
+    it('anti-escalada: quem não tem a personalizada não a concede', async () => {
+      giveMember(ROLES_MANAGE, APPROVE);
+
+      await expect(
+        createRole.execute({
+          cognitoSub: MEMBER.sub,
+          organizationId: acme.id,
+          name: 'Assinatura',
+          permissions: [SIGN],
+        }),
+      ).rejects.toBeInstanceOf(PrivilegeEscalationError);
+      await expect(
+        createRole.execute({
+          cognitoSub: MEMBER.sub,
+          organizationId: acme.id,
+          name: 'Aprovação',
+          permissions: [APPROVE],
+        }),
+      ).resolves.toBeDefined();
+    });
+
+    it('myPermissions: OWNER recebe sistema e personalizadas da organização; os demais, as do papel', async () => {
+      seedCustom('payments:refund', createOrganization('beta'));
+      const permissionsOf = (who: { sub: string }) =>
+        getMyPermissions.execute({
+          cognitoSub: who.sub,
+          organizationId: acme.id,
+        });
+
+      expect(await permissionsOf(OWNER)).toEqual([
+        ...Object.values(OrganizationPermission),
+        SIGN,
+        APPROVE,
+      ]);
+
+      giveMember(MEMBERS_READ, APPROVE);
+      expect(await permissionsOf(MEMBER)).toEqual([MEMBERS_READ, APPROVE]);
     });
   });
 });

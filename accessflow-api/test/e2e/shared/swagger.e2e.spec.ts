@@ -113,6 +113,39 @@ describe('Swagger (e2e)', () => {
       ]);
     });
 
+    it('documenta o POST /v1/authorize: escopo, corpo, exemplos e respostas', () => {
+      const operation = spec.paths['/v1/authorize']?.post;
+
+      expect(operation.tags).toEqual(['Integrações — Autorização']);
+      expect(operation.description).toContain('accessflow-api/authorize');
+      expect(operation.security).toEqual([{ 'machine-token': [] }]);
+      expect(operation.requestBody.content['application/json']).toMatchObject({
+        schema: { $ref: '#/components/schemas/AuthorizeRequest' },
+        examples: { pedido: expect.any(Object) },
+      });
+      expect(Object.keys(operation.responses).sort()).toEqual([
+        '200',
+        '400',
+        '401',
+        '403',
+        '404',
+        '500',
+      ]);
+      expect(
+        Object.keys(
+          operation.responses['200'].content['application/json'].examples,
+        ),
+      ).toEqual(['tudoPermitido', 'parcial', 'naoMembro']);
+
+      const { AuthorizeRequest } = spec.components.schemas;
+      expect(AuthorizeRequest.properties.organizationId.format).toBe('uuid');
+      expect(AuthorizeRequest.properties.permissions).toMatchObject({
+        type: 'array',
+        minItems: 1,
+        maxItems: 25,
+      });
+    });
+
     it('não inclui o GraphQL', () => {
       expect(Object.keys(spec.paths).some((p) => p.includes('graphql'))).toBe(
         false,

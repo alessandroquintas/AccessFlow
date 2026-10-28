@@ -1,7 +1,10 @@
 import { describe, expect, it } from 'vitest';
 import { Role } from '@/modules/organizations/domain/entities/role.entity';
 import { PrivilegeEscalationError } from '@/modules/organizations/domain/errors/privilege-escalation.error';
-import { OrganizationPermission } from '@/modules/organizations/policies/organization-permission';
+import {
+  OrganizationPermission,
+  PermissionCatalog,
+} from '@/modules/organizations/policies/organization-permission';
 import {
   ensureCanAssignRole,
   ensureCanChangePermissions,
@@ -22,7 +25,11 @@ const {
 
 const { owner, member } = Role.createDefaults('org-1', NOW);
 const custom = (name: string, permissions: readonly string[]) =>
-  Role.create({ organizationId: 'org-1', name, permissions }, NOW);
+  Role.create(
+    { organizationId: 'org-1', name, permissions },
+    PermissionCatalog.system(),
+    NOW,
+  );
 
 /** Gerencia e atribui papéis, mas não remove membros nem edita a organização. */
 const manager = custom('Gestor', [

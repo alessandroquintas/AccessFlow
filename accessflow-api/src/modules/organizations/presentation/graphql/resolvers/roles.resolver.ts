@@ -20,25 +20,24 @@ import { UpdateRoleUseCase } from '@/modules/organizations/application/use-cases
 import { DeleteRoleUseCase } from '@/modules/organizations/application/use-cases/delete-role.use-case';
 import { AssignRoleUseCase } from '@/modules/organizations/application/use-cases/assign-role.use-case';
 import { CountMembersByRoleUseCase } from '@/modules/organizations/application/use-cases/count-members-by-role.use-case';
-import { PERMISSION_CATALOG } from '@/modules/organizations/policies/organization-permission';
+import { GetPermissionCatalogUseCase } from '@/modules/organizations/application/use-cases/get-permission-catalog.use-case';
+import {
+  PERMISSION_CATALOG,
+  PermissionCatalog,
+} from '@/modules/organizations/policies/organization-permission';
 import { CreateRoleInput } from '../inputs/create-role.input';
 import { UpdateRoleInput } from '../inputs/update-role.input';
 import { AssignRoleInput } from '../inputs/assign-role.input';
 import { OrganizationRoleType } from '../types/organization-role.type';
 import { PermissionDefinitionType } from '../types/permission-definition.type';
 import { OrganizationMemberType } from '../types/organization-member.type';
-
-/** Contagens por organização, guardadas só durante uma requisição. */
-type MemberCountsByOrganization = Map<string, Promise<Map<string, number>>>;
+import { PerRequestCache } from './per-request-cache';
 
 @Resolver(() => OrganizationRoleType)
 @UseGuards(JwtAuthGuard)
 export class RolesResolver {
-  // Chave: o contexto GraphQL, novo a cada requisição.
-  private readonly memberCounts = new WeakMap<
-    object,
-    MemberCountsByOrganization
-  >();
+  private readonly memberCounts: PerRequestCache<Map<string, number>>;
+  private readonly catalogs: PerRequestCache<PermissionCatalog>;
 
   constructor(
     private readonly listOrganizationRolesUseCase: ListOrganizationRolesUseCase,
@@ -47,8 +46,16 @@ export class RolesResolver {
     private readonly updateRoleUseCase: UpdateRoleUseCase,
     private readonly deleteRoleUseCase: DeleteRoleUseCase,
     private readonly assignRoleUseCase: AssignRoleUseCase,
-    private readonly countMembersByRoleUseCase: CountMembersByRoleUseCase,
-  ) {}
+    countMembersByRoleUseCase: CountMembersByRoleUseCase,
+    getPermissionCatalogUseCase: GetPermissionCatalogUseCase,
+  ) {
+    this.memberCounts = new PerRequestCache((organizationId) =>
+      countMembersByRoleUseCase.execute(organizationId),
+    );
+    this.catalogs = new PerRequestCache((organizationId) =>
+      getPermissionCatalogUseCase.execute(organizationId),
+    );
+  }
 
   @Query(() => [OrganizationRoleType], {
     description:
@@ -175,18 +182,25 @@ export class RolesResolver {
   ): Promise<number> {
     if (role.knownMemberCount !== undefined) return role.knownMemberCount;
 
-    let byOrganization = this.memberCounts.get(context);
-    if (!byOrganization) {
-      byOrganization = new Map();
-      this.memberCounts.set(context, byOrganization);
-    }
+    const counts = await this.memberCounts.get(context, role.organizationId);
+    return counts.get(role.id) ?? 0;
+  }
 
-    let counts = byOrganization.get(role.organizationId);
-    if (!counts) {
-      counts = this.countMembersByRoleUseCase.execute(role.organizationId);
-      byOrganization.set(role.organizationId, counts);
-    }
+  /**
+   * Os demais papéis têm as gravadas; só o OWNER depende do catálogo
+   * efetivo, carregado uma vez por organização e requisição.
+   */
+  @ResolveField(() => [String], {
+    description:
+      'Permissões efetivas, na ordem do catálogo. O OWNER tem o catálogo inteiro.',
+  })
+  async permissions(
+    @Parent() role: OrganizationRoleType,
+    @Context() context: object,
+  ): Promise<readonly string[]> {
+    if (!role.source.isOwner()) return role.source.permissions;
 
-    return (await counts).get(role.id) ?? 0;
+    const catalog = await this.catalogs.get(context, role.organizationId);
+    return role.source.effectivePermissions(catalog);
   }
 }

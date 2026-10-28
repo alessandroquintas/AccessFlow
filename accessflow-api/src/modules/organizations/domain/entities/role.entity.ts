@@ -4,8 +4,8 @@ import { SystemRoleImmutableError } from '../errors/system-role-immutable.error'
 import { RoleName } from '../value-objects/role-name.vo';
 import {
   DEFAULT_MEMBER_PERMISSIONS,
-  OrganizationPermission,
   parsePermissions,
+  PermissionCatalog,
   sortPermissions,
 } from '../../policies/organization-permission';
 
@@ -90,8 +90,8 @@ export class Role {
   }
 
   /**
-   * Papel customizado. As permissões precisam estar no catálogo
-   * (InvalidPermissionError); repetidas são descartadas.
+   * Papel customizado. As permissões precisam estar no catálogo efetivo da
+   * organização (InvalidPermissionError); repetidas são descartadas.
    */
   static create(
     input: {
@@ -99,6 +99,7 @@ export class Role {
       name: string;
       permissions: readonly string[];
     },
+    catalog: PermissionCatalog,
     now: Date,
   ): Role {
     return Role.restore({
@@ -107,7 +108,7 @@ export class Role {
       name: RoleName.create(input.name).value,
       description: null,
       systemKey: null,
-      permissions: parsePermissions(input.permissions),
+      permissions: parsePermissions(input.permissions, catalog),
       deletedAt: null,
       createdAt: now,
       updatedAt: now,
@@ -181,11 +182,12 @@ export class Role {
     return this.isOwner() || this.granted.has(permission);
   }
 
-  /** As que o papel concede de fato: para o OWNER, o catálogo inteiro. */
-  effectivePermissions(): readonly string[] {
-    return this.isOwner()
-      ? Object.values(OrganizationPermission)
-      : this.state.permissions;
+  /**
+   * As que o papel concede de fato. Para o OWNER, o catálogo efetivo inteiro
+   * (sistema e personalizadas); para os demais, as gravadas.
+   */
+  effectivePermissions(catalog: PermissionCatalog): readonly string[] {
+    return this.isOwner() ? catalog.keys : this.state.permissions;
   }
 
   /** Mesmo nome, com a mesma grafia, não é alteração: não muda nada. */
@@ -203,17 +205,21 @@ export class Role {
   }
 
   /**
-   * Troca as permissões gravadas (InvalidPermissionError fora do catálogo).
-   * O mesmo conjunto, em qualquer ordem, não muda nada.
+   * Troca as permissões gravadas (InvalidPermissionError fora do catálogo
+   * efetivo). O mesmo conjunto, em qualquer ordem, não muda nada.
    */
-  setPermissions(permissions: readonly string[], now: Date): void {
+  setPermissions(
+    permissions: readonly string[],
+    catalog: PermissionCatalog,
+    now: Date,
+  ): void {
     if (this.isOwner()) {
       throw new SystemRoleImmutableError(
         'As permissões do OWNER não podem ser alteradas.',
       );
     }
 
-    const next = parsePermissions(permissions);
+    const next = parsePermissions(permissions, catalog);
     const unchanged =
       next.length === this.granted.size &&
       next.every((permission) => this.granted.has(permission));

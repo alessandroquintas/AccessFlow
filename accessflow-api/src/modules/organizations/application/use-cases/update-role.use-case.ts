@@ -1,5 +1,6 @@
 import { ClockPort } from '@/shared/application/ports/clock.port';
 import { TransactionManager } from '@/shared/application/ports/transaction-manager.port';
+import { CustomPermissionRepository } from '../../domain/repositories/custom-permission.repository';
 import { MembershipRepository } from '../../domain/repositories/membership.repository';
 import { OrganizationRepository } from '../../domain/repositories/organization.repository';
 import { RoleRepository } from '../../domain/repositories/role.repository';
@@ -8,6 +9,7 @@ import { ensureCanChangePermissions } from '../../policies/privilege-escalation'
 import { OrganizationRole } from '../dto/organization-role';
 import { UserDirectoryPort } from '../ports/user-directory.port';
 import { ensureRoleNameAvailable } from '../services/ensure-role-name-available';
+import { loadPermissionCatalog } from '../services/load-permission-catalog';
 import { OrganizationAccessService } from '../services/organization-access.service';
 import { requireRole } from '../services/require-role';
 
@@ -26,6 +28,7 @@ export class UpdateRoleUseCase {
     private readonly organizations: OrganizationRepository,
     private readonly roles: RoleRepository,
     private readonly memberships: MembershipRepository,
+    private readonly customPermissions: CustomPermissionRepository,
     private readonly users: UserDirectoryPort,
     private readonly access: OrganizationAccessService,
     private readonly transactions: TransactionManager,
@@ -61,7 +64,13 @@ export class UpdateRoleUseCase {
 
       if (input.permissions !== undefined) {
         const before = role.permissions;
-        role.setPermissions(input.permissions, now);
+        // Lido com a organização travada: uma exclusão concorrente da
+        // permissão ou termina antes e é vista aqui, ou espera.
+        const catalog = await loadPermissionCatalog(
+          this.customPermissions,
+          organizationId,
+        );
+        role.setPermissions(input.permissions, catalog, now);
         ensureCanChangePermissions(actorRole, {
           before,
           after: role.permissions,

@@ -1,6 +1,7 @@
 import { describe, expect, it } from 'vitest';
 import { InvalidPermissionError } from '@/modules/organizations/domain/errors/invalid-permission.error';
 import {
+  PermissionCatalog,
   DEFAULT_MEMBER_PERMISSIONS,
   OrganizationPermission,
   PERMISSION_CATALOG,
@@ -42,12 +43,15 @@ describe('Catálogo de permissões', () => {
 describe('parsePermissions', () => {
   it('remove repetidas e devolve na ordem do catálogo', () => {
     expect(
-      parsePermissions([ROLES_ASSIGN, MEMBERS_READ, ROLES_ASSIGN, ROLES_READ]),
+      parsePermissions(
+        [ROLES_ASSIGN, MEMBERS_READ, ROLES_ASSIGN, ROLES_READ],
+        PermissionCatalog.system(),
+      ),
     ).toEqual([MEMBERS_READ, ROLES_READ, ROLES_ASSIGN]);
   });
 
   it('conjunto vazio é válido', () => {
-    expect(parsePermissions([])).toEqual([]);
+    expect(parsePermissions([], PermissionCatalog.system())).toEqual([]);
   });
 
   it.each([
@@ -57,12 +61,14 @@ describe('parsePermissions', () => {
     ['com espaço', [' members:read']],
     ['vazia', ['']],
   ])('recusa chave %s', (_, keys) => {
-    expect(() => parsePermissions(keys)).toThrow(InvalidPermissionError);
+    expect(() => parsePermissions(keys, PermissionCatalog.system())).toThrow(
+      InvalidPermissionError,
+    );
   });
 
   it('a mensagem traz a chave recusada', () => {
-    expect(() => parsePermissions(['billing:read'])).toThrow(
-      'Permissão fora do catálogo: "billing:read".',
-    );
+    expect(() =>
+      parsePermissions(['billing:read'], PermissionCatalog.system()),
+    ).toThrow('Permissão fora do catálogo: "billing:read".');
   });
 });

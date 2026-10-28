@@ -7,7 +7,10 @@ import { InvalidRoleError } from '@/modules/organizations/domain/errors/invalid-
 import { InvalidPermissionError } from '@/modules/organizations/domain/errors/invalid-permission.error';
 import { SystemRoleImmutableError } from '@/modules/organizations/domain/errors/system-role-immutable.error';
 import { RoleName } from '@/modules/organizations/domain/value-objects/role-name.vo';
-import { OrganizationPermission } from '@/modules/organizations/policies/organization-permission';
+import {
+  PermissionCatalog,
+  OrganizationPermission,
+} from '@/modules/organizations/policies/organization-permission';
 
 const NOW = new Date('2026-03-01T12:00:00.000Z');
 const LATER = new Date('2026-03-02T12:00:00.000Z');
@@ -140,15 +143,18 @@ describe('Role', () => {
 
   describe('effectivePermissions', () => {
     it('OWNER: o catálogo inteiro; os demais: as gravadas', () => {
-      expect(owner.effectivePermissions()).toEqual(
+      expect(owner.effectivePermissions(PermissionCatalog.system())).toEqual(
         Object.values(OrganizationPermission),
       );
-      expect(member.effectivePermissions()).toEqual([MEMBERS_READ]);
+      expect(member.effectivePermissions(PermissionCatalog.system())).toEqual([
+        MEMBERS_READ,
+      ]);
       expect(
         Role.create(
           { organizationId: 'org-1', name: 'Vazio', permissions: [] },
+          PermissionCatalog.system(),
           NOW,
-        ).effectivePermissions(),
+        ).effectivePermissions(PermissionCatalog.system()),
       ).toEqual([]);
     });
   });
@@ -161,6 +167,7 @@ describe('Role', () => {
           name: '  Time   de Suporte ',
           permissions: [ROLES_READ, MEMBERS_INVITE, ROLES_READ, MEMBERS_READ],
         },
+        PermissionCatalog.system(),
         NOW,
       );
 
@@ -182,6 +189,7 @@ describe('Role', () => {
     it('aceita conjunto vazio', () => {
       const role = Role.create(
         { organizationId: 'org-1', name: 'Leitor', permissions: [] },
+        PermissionCatalog.system(),
         NOW,
       );
 
@@ -197,6 +205,7 @@ describe('Role', () => {
       expect(() =>
         Role.create(
           { organizationId: 'org-1', name: 'Financeiro', permissions },
+          PermissionCatalog.system(),
           NOW,
         ),
       ).toThrow(InvalidPermissionError);
@@ -206,6 +215,7 @@ describe('Role', () => {
       expect(() =>
         Role.create(
           { organizationId: 'org-1', name: '  ', permissions: [] },
+          PermissionCatalog.system(),
           NOW,
         ),
       ).toThrow(InvalidRoleError);
@@ -216,6 +226,7 @@ describe('Role', () => {
     const custom = () =>
       Role.create(
         { organizationId: 'org-1', name: 'Financeiro', permissions: [] },
+        PermissionCatalog.system(),
         NOW,
       );
 
@@ -282,13 +293,18 @@ describe('Role', () => {
     const custom = (permissions: string[]) =>
       Role.create(
         { organizationId: 'org-1', name: 'Financeiro', permissions },
+        PermissionCatalog.system(),
         NOW,
       );
 
     it('troca as permissões e o que o papel concede', () => {
       const role = custom([MEMBERS_READ]);
 
-      role.setPermissions([MEMBERS_INVITE, MEMBERS_INVITE, ROLES_READ], LATER);
+      role.setPermissions(
+        [MEMBERS_INVITE, MEMBERS_INVITE, ROLES_READ],
+        PermissionCatalog.system(),
+        LATER,
+      );
 
       expect(role.permissions).toEqual([MEMBERS_INVITE, ROLES_READ]);
       expect(role.grants(MEMBERS_INVITE)).toBe(true);
@@ -299,7 +315,7 @@ describe('Role', () => {
     it('conjunto vazio tira tudo', () => {
       const role = custom([MEMBERS_READ, MEMBERS_REMOVE]);
 
-      role.setPermissions([], LATER);
+      role.setPermissions([], PermissionCatalog.system(), LATER);
 
       expect(role.permissions).toEqual([]);
       expect(role.grants(MEMBERS_READ)).toBe(false);
@@ -308,7 +324,11 @@ describe('Role', () => {
     it('o mesmo conjunto, em outra ordem ou com repetição, não muda nada', () => {
       const role = custom([MEMBERS_READ, ROLES_READ]);
 
-      role.setPermissions([ROLES_READ, MEMBERS_READ, ROLES_READ], LATER);
+      role.setPermissions(
+        [ROLES_READ, MEMBERS_READ, ROLES_READ],
+        PermissionCatalog.system(),
+        LATER,
+      );
 
       expect(role.updatedAt).toEqual(NOW);
     });
@@ -317,7 +337,11 @@ describe('Role', () => {
       const role = custom([MEMBERS_READ]);
 
       expect(() =>
-        role.setPermissions([MEMBERS_INVITE, 'members:delete'], LATER),
+        role.setPermissions(
+          [MEMBERS_INVITE, 'members:delete'],
+          PermissionCatalog.system(),
+          LATER,
+        ),
       ).toThrow(InvalidPermissionError);
       expect(role.permissions).toEqual([MEMBERS_READ]);
       expect(role.grants(MEMBERS_INVITE)).toBe(false);
@@ -326,7 +350,11 @@ describe('Role', () => {
     it('as do MEMBER podem ser trocadas', () => {
       const { member } = defaults();
 
-      member.setPermissions([MEMBERS_READ, MEMBERS_INVITE], LATER);
+      member.setPermissions(
+        [MEMBERS_READ, MEMBERS_INVITE],
+        PermissionCatalog.system(),
+        LATER,
+      );
 
       expect(member.permissions).toEqual([MEMBERS_READ, MEMBERS_INVITE]);
       expect(member.systemKey).toBe(RoleSystemKey.MEMBER);
@@ -337,9 +365,9 @@ describe('Role', () => {
       (permissions) => {
         const { owner } = defaults();
 
-        expect(() => owner.setPermissions(permissions, LATER)).toThrow(
-          SystemRoleImmutableError,
-        );
+        expect(() =>
+          owner.setPermissions(permissions, PermissionCatalog.system(), LATER),
+        ).toThrow(SystemRoleImmutableError);
         expect(owner.updatedAt).toEqual(NOW);
       },
     );
@@ -349,6 +377,7 @@ describe('Role', () => {
     it('apaga papel customizado; repetir não muda a data', () => {
       const role = Role.create(
         { organizationId: 'org-1', name: 'Financeiro', permissions: [] },
+        PermissionCatalog.system(),
         NOW,
       );
 

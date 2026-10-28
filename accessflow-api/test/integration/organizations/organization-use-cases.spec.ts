@@ -15,6 +15,14 @@ import { PrismaTransactionManager } from '@/shared/infrastructure/database/prism
 import { RoleSystemKey } from '@/modules/organizations/domain/entities/role.entity';
 import { OrganizationPermissionDeniedError } from '@/modules/organizations/domain/errors/organization-permission-denied.error';
 import { OrganizationPermission } from '@/modules/organizations/policies/organization-permission';
+import { CreatePermissionUseCase } from '@/modules/organizations/application/use-cases/create-permission.use-case';
+import { DeletePermissionUseCase } from '@/modules/organizations/application/use-cases/delete-permission.use-case';
+import { PermissionInUseError } from '@/modules/organizations/domain/errors/permission-in-use.error';
+import { PermissionKeyTakenError } from '@/modules/organizations/domain/errors/permission-key-taken.error';
+import { PermissionLimitReachedError } from '@/modules/organizations/domain/errors/permission-limit-reached.error';
+import { CustomPermission } from '@/modules/organizations/domain/entities/custom-permission.entity';
+import { InvalidPermissionError } from '@/modules/organizations/domain/errors/invalid-permission.error';
+import { PrismaCustomPermissionRepository } from '@/modules/organizations/infrastructure/persistence/prisma-custom-permission.repository';
 import { OrganizationAccessService } from '@/modules/organizations/application/services/organization-access.service';
 import { CreateOrganizationUseCase } from '@/modules/organizations/application/use-cases/create-organization.use-case';
 import { InviteMemberUseCase } from '@/modules/organizations/application/use-cases/invite-member.use-case';
@@ -52,6 +60,8 @@ let createRole: CreateRoleUseCase;
 let updateRole: UpdateRoleUseCase;
 let deleteRole: DeleteRoleUseCase;
 let assignRole: AssignRoleUseCase;
+let createPermission: CreatePermissionUseCase;
+let deletePermission: DeletePermissionUseCase;
 
 async function createUser(cognitoSub: string) {
   const user = await prisma.user.create({
@@ -99,6 +109,25 @@ async function lockWaiters(): Promise<number> {
   return waiting;
 }
 
+/**
+ * Papéis não apagados com chave fora do catálogo efetivo da organização: nem
+ * de sistema, nem personalizada dela.
+ */
+async function grantsOutsideCatalog(): Promise<number> {
+  const [{ count }] = await prisma.$queryRaw<{ count: number }[]>`
+    SELECT count(*)::int AS count
+    FROM role_permissions rp
+    JOIN roles r ON r.id = rp.role_id
+    WHERE r.deleted_at IS NULL
+      AND rp.permission_key NOT IN (${Prisma.join(Object.values(OrganizationPermission))})
+      AND NOT EXISTS (
+        SELECT 1 FROM organization_permissions op
+        WHERE op.organization_id = r.organization_id
+          AND op.key = rp.permission_key
+      )`;
+  return count;
+}
+
 /** Espera até `count` sessões deste banco estarem bloqueadas numa trava. */
 async function waitForLockWaiters(count = 1, timeoutMs = 3000) {
   const deadline = Date.now() + timeoutMs;
@@ -122,6 +151,10 @@ describe('Casos de uso de organizations com Prisma (integração)', () => {
     const memberships = new PrismaMembershipRepository(clients, transactions);
     const roles = new PrismaRoleRepository(clients, transactions);
     const invitations = new PrismaInvitationRepository(clients, transactions);
+    const customPermissions = new PrismaCustomPermissionRepository(
+      clients,
+      transactions,
+    );
     const clock = new FixedClock(new Date('2026-03-01T12:00:00.000Z'));
     users = new FakeUserDirectory();
     const access = new OrganizationAccessService(
@@ -167,6 +200,7 @@ describe('Casos de uso de organizations com Prisma (integração)', () => {
     createRole = new CreateRoleUseCase(
       organizations,
       roles,
+      customPermissions,
       users,
       access,
       transactions,
@@ -176,6 +210,7 @@ describe('Casos de uso de organizations com Prisma (integração)', () => {
       organizations,
       roles,
       memberships,
+      customPermissions,
       users,
       access,
       transactions,
@@ -197,6 +232,21 @@ describe('Casos de uso de organizations com Prisma (integração)', () => {
       access,
       transactions,
       clock,
+    );
+    createPermission = new CreatePermissionUseCase(
+      organizations,
+      customPermissions,
+      users,
+      access,
+      transactions,
+      clock,
+    );
+    deletePermission = new DeletePermissionUseCase(
+      organizations,
+      customPermissions,
+      users,
+      access,
+      transactions,
     );
   });
 
@@ -793,6 +843,176 @@ describe('Casos de uso de organizations com Prisma (integração)', () => {
       expect(reasonOf(await accepted)).toBeUndefined();
       // O aceite releu o convite depois da trava: vale o papel do reconvite.
       expect((await membershipOf(carla.id))?.role.systemKey).toBe('OWNER');
+    });
+  });
+
+  /**
+   * Provas de concorrência das permissões personalizadas (Fase 8c), pelo
+   * mesmo método das provas dos papéis.
+   */
+  describe('provas de concorrência das permissões personalizadas', () => {
+    const KEY = 'invoices:approve';
+    let acme: SeededOrganization;
+    let permissionId: string;
+
+    beforeEach(async () => {
+      const ana = await createUser('sub-ana');
+      acme = await seedOrganization(prisma, { slug: 'acme', owner: ana.id });
+      ({ id: permissionId } = await prisma.customPermission.create({
+        data: { organizationId: acme.id, key: KEY, description: 'Aprovar' },
+      }));
+      await warmPool(8);
+    });
+
+    const removeKey = () =>
+      settle(
+        deletePermission.execute({
+          cognitoSub: 'sub-ana',
+          organizationId: acme.id,
+          key: KEY,
+        }),
+      );
+
+    it('prova A 8c: deletePermission × updateRole que concede a permissão', async () => {
+      const finance = await seedRole(prisma, {
+        organizationId: acme.id,
+        name: 'Financeiro',
+      });
+      let deleted!: Promise<PromiseSettledResult<void>>;
+      let updated!: Promise<PromiseSettledResult<unknown>>;
+
+      // T0 trava as linhas que as duas escritas alteram: as duas leem antes.
+      await prisma.$transaction(async (tx) => {
+        await tx.$queryRaw`SELECT id FROM organization_permissions WHERE id = ${permissionId}::uuid FOR UPDATE`;
+        await tx.$queryRaw`SELECT id FROM roles WHERE id = ${finance}::uuid FOR UPDATE`;
+        deleted = removeKey();
+        updated = settle(
+          updateRole.execute({
+            cognitoSub: 'sub-ana',
+            organizationId: acme.id,
+            roleId: finance,
+            permissions: [KEY],
+          }),
+        );
+        await waitForLockWaiters(2);
+      });
+
+      const results = [await deleted, await updated];
+      // A invariante primeiro: sem a trava, o papel fica com chave excluída.
+      expect(await grantsOutsideCatalog()).toBe(0);
+      expect(results.filter((r) => r.status === 'fulfilled')).toHaveLength(1);
+      const [failure] = results.map(reasonOf).filter(Boolean);
+      expect(
+        failure instanceof PermissionInUseError ||
+          failure instanceof InvalidPermissionError,
+      ).toBe(true);
+    });
+
+    it('prova B 8c: dois createPermission com a mesma chave', async () => {
+      const create = () =>
+        settle(
+          createPermission.execute({
+            cognitoSub: 'sub-ana',
+            organizationId: acme.id,
+            key: 'contracts:sign',
+            description: 'Assinar',
+          }),
+        );
+      let first!: Promise<PromiseSettledResult<unknown>>;
+      let second!: Promise<PromiseSettledResult<unknown>>;
+
+      await prisma.$transaction(async (tx) => {
+        await tx.$queryRaw`SELECT id FROM organizations WHERE id = ${acme.id}::uuid FOR UPDATE`;
+        first = create();
+        second = create();
+        await waitForLockWaiters(2);
+      });
+
+      const results = [await first, await second];
+      expect(
+        await prisma.customPermission.count({
+          where: { organizationId: acme.id, key: 'contracts:sign' },
+        }),
+      ).toBe(1);
+      expect(results.filter((r) => r.status === 'fulfilled')).toHaveLength(1);
+      expect(results.map(reasonOf).filter(Boolean)).toEqual([
+        expect.any(PermissionKeyTakenError),
+      ]);
+    });
+
+    it('prova B2 8c extra: dois createPermission com chaves diferentes no limite', async () => {
+      // Com a do beforeEach, a organização fica a uma do limite.
+      await prisma.customPermission.createMany({
+        data: Array.from(
+          { length: CustomPermission.MAX_PER_ORGANIZATION - 2 },
+          (_, i) => ({
+            organizationId: acme.id,
+            key: `resource-${i}:read`,
+            description: 'Lote',
+          }),
+        ),
+      });
+      const create = (key: string) =>
+        settle(
+          createPermission.execute({
+            cognitoSub: 'sub-ana',
+            organizationId: acme.id,
+            key,
+            description: 'Última',
+          }),
+        );
+      let first!: Promise<PromiseSettledResult<unknown>>;
+      let second!: Promise<PromiseSettledResult<unknown>>;
+
+      await prisma.$transaction(async (tx) => {
+        await tx.$queryRaw`SELECT id FROM organizations WHERE id = ${acme.id}::uuid FOR UPDATE`;
+        first = create('contracts:sign');
+        second = create('payments:refund');
+        await waitForLockWaiters(2);
+      });
+
+      const results = [await first, await second];
+      // A invariante primeiro: a unique não protege o limite; só a trava.
+      expect(
+        await prisma.customPermission.count({
+          where: { organizationId: acme.id },
+        }),
+      ).toBe(CustomPermission.MAX_PER_ORGANIZATION);
+      expect(results.map(reasonOf).filter(Boolean)).toEqual([
+        expect.any(PermissionLimitReachedError),
+      ]);
+    });
+
+    it('prova C 8c: deletePermission × createRole que usa a permissão', async () => {
+      let deleted!: Promise<PromiseSettledResult<void>>;
+      let created!: Promise<PromiseSettledResult<unknown>>;
+
+      // T0 trava a organização (o INSERT do papel checa a FK nela) e a
+      // linha da permissão (o DELETE dela).
+      await prisma.$transaction(async (tx) => {
+        await tx.$queryRaw`SELECT id FROM organizations WHERE id = ${acme.id}::uuid FOR UPDATE`;
+        await tx.$queryRaw`SELECT id FROM organization_permissions WHERE id = ${permissionId}::uuid FOR UPDATE`;
+        deleted = removeKey();
+        created = settle(
+          createRole.execute({
+            cognitoSub: 'sub-ana',
+            organizationId: acme.id,
+            name: 'Financeiro',
+            permissions: [KEY],
+          }),
+        );
+        await waitForLockWaiters(2);
+      });
+
+      const results = [await deleted, await created];
+      // A invariante primeiro: sem a trava, o papel nasce com chave excluída.
+      expect(await grantsOutsideCatalog()).toBe(0);
+      expect(results.filter((r) => r.status === 'fulfilled')).toHaveLength(1);
+      const [failure] = results.map(reasonOf).filter(Boolean);
+      expect(
+        failure instanceof PermissionInUseError ||
+          failure instanceof InvalidPermissionError,
+      ).toBe(true);
     });
   });
 });

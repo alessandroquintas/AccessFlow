@@ -17,6 +17,16 @@ input CreateOrganizationInput {
   slug: String!
 }
 
+input CreatePermissionInput {
+  """De 1 a 200 caracteres."""
+  description: String!
+
+  """
+  recurso:ação em minúsculas, dígitos e hífen, até 40 caracteres de cada lado. Não muda depois de criada. Recursos do sistema são reservados.
+  """
+  key: String!
+}
+
 input CreateRoleInput {
   """
   Nome (1 a 50 caracteres), único na organização sem diferenciar maiúsculas e minúsculas.
@@ -88,11 +98,21 @@ type Mutation {
   """Cria uma organização. O usuário autenticado se torna OWNER."""
   createOrganization(input: CreateOrganizationInput!): Organization!
 
+  """
+  Cria uma permissão personalizada. Ninguém a recebe além do OWNER. Exige permissions:manage.
+  """
+  createPermission(input: CreatePermissionInput!, organizationId: ID!): OrganizationPermission!
+
   """Cria um papel personalizado. Exige roles:manage."""
   createRole(input: CreateRoleInput!, organizationId: ID!): OrganizationRole!
 
   """Recusa um convite para o e-mail do usuário autenticado."""
   declineInvitation(invitationId: ID!): Boolean!
+
+  """
+  Exclui de vez uma permissão personalizada que nenhum papel concede. Exige permissions:manage.
+  """
+  deletePermission(key: String!, organizationId: ID!): Boolean!
 
   """
   Apaga um papel personalizado sem membros ativos nem convites pendentes. Exige roles:manage.
@@ -125,6 +145,11 @@ type Mutation {
 
   """Atualiza os dados da organização. """
   updateOrganization(input: UpdateOrganizationInput!, organizationId: ID!): Organization!
+
+  """
+  Troca a descrição de uma permissão personalizada. Exige permissions:manage.
+  """
+  updatePermission(input: UpdatePermissionInput!, organizationId: ID!): OrganizationPermission!
 
   """
   Renomeia um papel ou troca as permissões dele. O OWNER não muda; o MEMBER só muda as permissões. Exige roles:manage.
@@ -201,6 +226,16 @@ type OrganizationMemberConnection {
   pageInfo: PageInfo!
 }
 
+type OrganizationPermission {
+  description: String!
+
+  """
+  Do catálogo de sistema: não pode ser editada nem excluída. As personalizadas são da organização.
+  """
+  isSystem: Boolean!
+  key: String!
+}
+
 type OrganizationRole {
   createdAt: DateTime!
   id: ID!
@@ -266,6 +301,11 @@ type Query {
   organizationMembers(after: String, first: Int, organizationId: ID!): OrganizationMemberConnection!
 
   """
+  Catálogo efetivo da organização: as de sistema na ordem do catálogo, depois as personalizadas por chave. Exige roles:read.
+  """
+  organizationPermissions(organizationId: ID!): [OrganizationPermission!]!
+
+  """
   Papéis da organização, sem os apagados: os de sistema primeiro, depois por nome. Exige roles:read.
   """
   organizationRoles(organizationId: ID!): [OrganizationRole!]!
@@ -296,6 +336,14 @@ input UpdateMyProfileInput {
 input UpdateOrganizationInput {
   """Novo nome de exibição (2 a 100 caracteres)."""
   name: String!
+}
+
+input UpdatePermissionInput {
+  """Nova descrição, de 1 a 200 caracteres."""
+  description: String!
+
+  """Chave da permissão personalizada. Não muda."""
+  key: String!
 }
 
 input UpdateRoleInput {

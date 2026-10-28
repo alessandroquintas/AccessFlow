@@ -20,6 +20,15 @@ import { SystemRoleImmutableError } from '@/modules/organizations/domain/errors/
 import { RoleInUseError } from '@/modules/organizations/domain/errors/role-in-use.error';
 import { RoleNotFoundError } from '@/modules/organizations/domain/errors/role-not-found.error';
 import { PrivilegeEscalationError } from '@/modules/organizations/domain/errors/privilege-escalation.error';
+import { InvalidPermissionKeyError } from '@/modules/organizations/domain/errors/invalid-permission-key.error';
+import { InvalidPermissionDescriptionError } from '@/modules/organizations/domain/errors/invalid-permission-description.error';
+import { ReservedPermissionResourceError } from '@/modules/organizations/domain/errors/reserved-permission-resource.error';
+import { InvalidCustomPermissionError } from '@/modules/organizations/domain/errors/invalid-custom-permission.error';
+import { PermissionKeyTakenError } from '@/modules/organizations/domain/errors/permission-key-taken.error';
+import { PermissionLimitReachedError } from '@/modules/organizations/domain/errors/permission-limit-reached.error';
+import { PermissionInUseError } from '@/modules/organizations/domain/errors/permission-in-use.error';
+import { PermissionNotFoundError } from '@/modules/organizations/domain/errors/permission-not-found.error';
+import { InvalidAuthorizationRequestError } from '@/modules/organizations/application/errors/invalid-authorization-request.error';
 
 const response = { tipo: 'resposta-http' };
 
@@ -81,6 +90,15 @@ describe('DomainErrorFilter', () => {
       [new RoleInUseError(), 'CONFLICT'],
       [new RoleNotFoundError(), 'NOT_FOUND'],
       [new PrivilegeEscalationError(), 'FORBIDDEN'],
+      [new InvalidPermissionKeyError('formato'), 'BAD_REQUEST'],
+      [new InvalidPermissionDescriptionError('vazia'), 'BAD_REQUEST'],
+      [new ReservedPermissionResourceError('reservado'), 'BAD_REQUEST'],
+      [new InvalidCustomPermissionError('id'), 'BAD_REQUEST'],
+      [new PermissionKeyTakenError(), 'CONFLICT'],
+      [new PermissionLimitReachedError(), 'CONFLICT'],
+      [new PermissionInUseError(), 'CONFLICT'],
+      [new PermissionNotFoundError(), 'NOT_FOUND'],
+      [new InvalidAuthorizationRequestError('corpo'), 'BAD_REQUEST'],
     ])('traduz %s para %s', (error, code) => {
       const result = sut.catch(error, graphqlHost()) as GraphQLError;
 

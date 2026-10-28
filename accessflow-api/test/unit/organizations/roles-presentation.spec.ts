@@ -1,7 +1,11 @@
 import { describe, expect, it, vi } from 'vitest';
 import { Role } from '@/modules/organizations/domain/entities/role.entity';
 import { CountMembersByRoleUseCase } from '@/modules/organizations/application/use-cases/count-members-by-role.use-case';
-import { OrganizationPermission } from '@/modules/organizations/policies/organization-permission';
+import { GetPermissionCatalogUseCase } from '@/modules/organizations/application/use-cases/get-permission-catalog.use-case';
+import {
+  OrganizationPermission,
+  PermissionCatalog,
+} from '@/modules/organizations/policies/organization-permission';
 import {
   MembershipRole,
   membershipRoleOf,
@@ -13,7 +17,11 @@ import { OrganizationRoleType } from '@/modules/organizations/presentation/graph
 const NOW = new Date('2026-03-01T12:00:00.000Z');
 
 function custom(organizationId: string, name: string): Role {
-  return Role.create({ organizationId, name, permissions: [] }, NOW);
+  return Role.create(
+    { organizationId, name, permissions: [] },
+    PermissionCatalog.system(),
+    NOW,
+  );
 }
 
 describe('MembershipRole', () => {
@@ -33,36 +41,68 @@ describe('MembershipRole', () => {
   });
 });
 
-describe('OrganizationRoleType', () => {
-  it('permissions são as efetivas: o OWNER recebe o catálogo inteiro', () => {
-    const { owner, member } = Role.createDefaults('org-1', NOW);
+function setupResolver(
+  counts: Record<string, Record<string, number>> = {},
+  customKeys: Record<string, string[]> = {},
+) {
+  const countMembers = vi.fn(async (organizationId: string) => {
+    return new Map(Object.entries(counts[organizationId] ?? {}));
+  });
+  const loadCatalog = vi.fn(async (organizationId: string) =>
+    PermissionCatalog.withCustom(customKeys[organizationId] ?? []),
+  );
+  const unused = {} as never;
+  const resolver = new RolesResolver(
+    unused,
+    unused,
+    unused,
+    unused,
+    unused,
+    unused,
+    { execute: countMembers } as unknown as CountMembersByRoleUseCase,
+    { execute: loadCatalog } as unknown as GetPermissionCatalogUseCase,
+  );
+  return { resolver, countMembers, loadCatalog };
+}
 
-    expect(OrganizationRoleType.from(owner).permissions).toEqual(
-      Object.values(OrganizationPermission),
+describe('RolesResolver.permissions', () => {
+  it('OWNER recebe o catálogo efetivo da organização; os demais, as gravadas, sem consultar', async () => {
+    const { owner, member } = Role.createDefaults('org-1', NOW);
+    const { resolver, loadCatalog } = setupResolver(
+      {},
+      { 'org-1': ['invoices:approve'] },
     );
-    expect(OrganizationRoleType.from(member).permissions).toEqual([
-      OrganizationPermission.MEMBERS_READ,
-    ]);
+
+    expect(
+      await resolver.permissions(OrganizationRoleType.from(member), {}),
+    ).toEqual([OrganizationPermission.MEMBERS_READ]);
+    expect(loadCatalog).not.toHaveBeenCalled();
+
+    expect(
+      await resolver.permissions(OrganizationRoleType.from(owner), {}),
+    ).toEqual([...Object.values(OrganizationPermission), 'invoices:approve']);
+  });
+
+  it('um catálogo por organização e requisição', async () => {
+    const a = Role.createDefaults('org-a', NOW).owner;
+    const b = Role.createDefaults('org-b', NOW).owner;
+    const { resolver, loadCatalog } = setupResolver();
+    const request = {};
+
+    await Promise.all(
+      [a, a, b].map((role) =>
+        resolver.permissions(OrganizationRoleType.from(role), request),
+      ),
+    );
+
+    expect(loadCatalog.mock.calls).toEqual([['org-a'], ['org-b']]);
   });
 });
 
 describe('RolesResolver.memberCount', () => {
   function setup(counts: Record<string, Record<string, number>>) {
-    const execute = vi.fn(async (organizationId: string) => {
-      return new Map(Object.entries(counts[organizationId] ?? {}));
-    });
-    const useCase = { execute } as unknown as CountMembersByRoleUseCase;
-    const unused = {} as never;
-    const resolver = new RolesResolver(
-      unused,
-      unused,
-      unused,
-      unused,
-      unused,
-      unused,
-      useCase,
-    );
-    return { resolver, execute };
+    const { resolver, countMembers } = setupResolver(counts);
+    return { resolver, execute: countMembers };
   }
 
   it('usa a contagem que o caso de uso já trouxe, sem consultar', async () => {
