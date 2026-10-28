@@ -101,6 +101,11 @@ resource "aws_cognito_resource_server" "api" {
     scope_name        = "members.read"
     scope_description = "Consultar se um usuário é membro de uma organização"
   }
+
+  scope {
+    scope_name        = "authorize"
+    scope_description = "Perguntar se um usuário pode executar ações numa organização"
+  }
 }
 
 # Cliente de integração (máquina): client credentials, com secret e sem usuário.
@@ -114,7 +119,10 @@ resource "aws_cognito_user_pool_client" "integration_demo" {
   allowed_oauth_flows                  = ["client_credentials"]
   # Escopo explícito, e não scope_identifiers inteiro: um escopo novo no
   # resource server não deve ser concedido a este client automaticamente.
-  allowed_oauth_scopes = ["${aws_cognito_resource_server.api.identifier}/members.read"]
+  allowed_oauth_scopes = [
+    "${aws_cognito_resource_server.api.identifier}/members.read",
+    "${aws_cognito_resource_server.api.identifier}/authorize",
+  ]
 
   # Sem esta lista o Cognito habilita SRP e CUSTOM_AUTH por padrão. O client
   # credentials não emite refresh token, então o fluxo abaixo fica inerte.
