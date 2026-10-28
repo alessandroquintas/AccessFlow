@@ -137,6 +137,11 @@ describe('Swagger (e2e)', () => {
         ),
       ).toEqual(['tudoPermitido', 'parcial', 'naoMembro']);
 
+      expect(
+        operation.responses['400'].content['application/json'].examples
+          .jsonInvalido.value.error.reason,
+      ).toBe('INVALID_JSON');
+
       const { AuthorizeRequest } = spec.components.schemas;
       expect(AuthorizeRequest.properties.organizationId.format).toBe('uuid');
       expect(AuthorizeRequest.properties.permissions).toMatchObject({

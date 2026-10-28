@@ -1,5 +1,10 @@
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
-import { HttpServer, Logger, NotFoundException } from '@nestjs/common';
+import {
+  BadRequestException,
+  HttpServer,
+  Logger,
+  NotFoundException,
+} from '@nestjs/common';
 import { ExecutionContextHost } from '@nestjs/core/helpers/execution-context-host';
 import { GraphQLError } from 'graphql';
 import { DomainErrorFilter } from '@/shared/presentation/domain-error.filter';
@@ -124,6 +129,101 @@ describe('DomainErrorFilter', () => {
   });
 
   describe('HTTP', () => {
+    describe('JSON inválido (BadRequestException do Nest para o SyntaxError do body-parser)', () => {
+      const parserError = () =>
+        new BadRequestException(
+          `Unexpected token 'o', "{oops" is not valid JSON`,
+        );
+
+      function hostWith(request: Record<string, unknown>) {
+        const host = new ExecutionContextHost([
+          request,
+          response,
+          () => undefined,
+        ]);
+        host.setType('http');
+        return host;
+      }
+
+      const jsonRequest = (overrides: Record<string, unknown> = {}) => ({
+        headers: {
+          'content-type': 'application/json; charset=utf-8',
+          'content-length': '5',
+        },
+        body: undefined,
+        ...overrides,
+      });
+
+      it('responde 400 INVALID_JSON no formato padrão, sem o texto do parser', () => {
+        sut.catch(parserError(), hostWith(jsonRequest()));
+
+        expect(adapter.reply).toHaveBeenCalledWith(
+          response,
+          {
+            error: {
+              code: 'BAD_REQUEST',
+              reason: 'INVALID_JSON',
+              message: 'O corpo da requisição não é um JSON válido.',
+            },
+          },
+          400,
+        );
+        expect(JSON.stringify(adapter.reply.mock.calls)).not.toContain('oops');
+      });
+
+      it('com transfer-encoding no lugar de content-length também', () => {
+        sut.catch(
+          parserError(),
+          hostWith(
+            jsonRequest({
+              headers: {
+                'content-type': 'application/json',
+                'transfer-encoding': 'chunked',
+              },
+            }),
+          ),
+        );
+
+        expect(adapter.reply.mock.calls[0][1]).toMatchObject({
+          error: { reason: 'INVALID_JSON' },
+        });
+      });
+
+      it.each([
+        ['corpo lido com sucesso', jsonRequest({ body: { ok: true } })],
+        [
+          'Content-Type que não é JSON',
+          jsonRequest({
+            headers: { 'content-type': 'text/plain', 'content-length': '5' },
+          }),
+        ],
+        [
+          'sem corpo',
+          jsonRequest({
+            headers: {
+              'content-type': 'application/json',
+              'content-length': '0',
+            },
+          }),
+        ],
+      ])('%s: segue o padrão do Nest', (_, request) => {
+        sut.catch(
+          new BadRequestException('Failed to decode param'),
+          hostWith(request),
+        );
+
+        expect(adapter.reply).toHaveBeenCalledWith(
+          response,
+          {
+            message: 'Failed to decode param',
+            error: 'Bad Request',
+            statusCode: 400,
+          },
+          400,
+        );
+      });
+    });
+
     it('responde DomainError com status e corpo padronizado', () => {
       const error = new OrganizationNotFoundError();
 

@@ -1,6 +1,8 @@
 import { DomainError } from '@/shared/domain/errors/domain.error';
+import { InvalidJsonError } from '@/shared/application/errors/invalid-json.error';
 import {
   ArgumentsHost,
+  BadRequestException,
   Catch,
   HttpException,
   HttpServer,
@@ -71,15 +73,46 @@ const OUTPUT_BY_DOMAIN_CODE: Record<string, ErrorOutput> = {
   RESERVED_PERMISSION_RESOURCE: BAD_REQUEST,
   INVALID_CUSTOM_PERMISSION: BAD_REQUEST,
   INVALID_AUTHORIZATION_REQUEST: BAD_REQUEST,
+  INVALID_JSON: BAD_REQUEST,
 };
 
 function outputFor(error: DomainError): ErrorOutput {
   return OUTPUT_BY_DOMAIN_CODE[error.code] ?? BAD_REQUEST;
 }
 
+interface IncomingRequest {
+  headers?: Record<string, string | string[] | undefined>;
+  body?: unknown;
+}
+
+/**
+ * Corpo JSON que o body-parser não conseguiu ler. O Nest troca o SyntaxError
+ * do parser por um BadRequestException com a mensagem dele e sem `cause`
+ * (RoutesResolver.mapExternalException), então o caso é reconhecido pelo
+ * estado em que o parser deixa a requisição: corpo JSON enviado e `body`
+ * ainda sem valor. A aplicação não lança BadRequestException em nenhum lugar.
+ */
+function isInvalidJsonBody(
+  exception: unknown,
+  request: IncomingRequest | undefined,
+): boolean {
+  if (!(exception instanceof BadRequestException)) return false;
+
+  const headers = request?.headers ?? {};
+  const isJson = /^application\/json\s*(;|$)/i.test(
+    String(headers['content-type'] ?? ''),
+  );
+  const hasBody =
+    headers['transfer-encoding'] !== undefined ||
+    Number(headers['content-length'] ?? 0) > 0;
+
+  return isJson && hasBody && request?.body === undefined;
+}
+
 /**
  * Traduz DomainError para GraphQL e HTTP. Em HTTP também mascara erros
- * inesperados; HttpException do Nest (ex.: rota inexistente) segue o padrão.
+ * inesperados e responde JSON inválido no formato padrão; as demais
+ * HttpException do Nest (ex.: rota inexistente) seguem o padrão do Nest.
  */
 @Catch()
 export class DomainErrorFilter extends BaseExceptionFilter {
@@ -115,27 +148,36 @@ export class DomainErrorFilter extends BaseExceptionFilter {
   }
 
   private catchHttp(exception: unknown, host: ArgumentsHost): void {
-    if (exception instanceof HttpException || this.isHttpError(exception)) {
-      return super.catch(exception, host);
+    const http = host.switchToHttp();
+    // Sem o texto do parser: ele repete pedaços do corpo recebido.
+    const error = isInvalidJsonBody(
+      exception,
+      http.getRequest<IncomingRequest | undefined>(),
+    )
+      ? new InvalidJsonError()
+      : exception;
+
+    if (error instanceof HttpException || this.isHttpError(error)) {
+      return super.catch(error, host);
     }
 
-    const response = host.switchToHttp().getResponse<unknown>();
+    const response = http.getResponse<unknown>();
 
-    if (exception instanceof DomainError) {
-      const { code, status } = outputFor(exception);
+    if (error instanceof DomainError) {
+      const { code, status } = outputFor(error);
 
       if (status === HttpStatus.UNAUTHORIZED) {
         this.httpAdapter.setHeader(response, 'WWW-Authenticate', 'Bearer');
       }
       this.httpAdapter.reply(
         response,
-        { error: { code, reason: exception.code, message: exception.message } },
+        { error: { code, reason: error.code, message: error.message } },
         status,
       );
       return;
     }
 
-    this.logger.error(exception);
+    this.logger.error(error);
     this.httpAdapter.reply(
       response,
       {

@@ -254,6 +254,23 @@ describe('POST /v1/authorize (e2e)', () => {
       expect(res.body.error).toMatchObject({ code: 'BAD_REQUEST', reason });
     });
 
+    it('corpo que não é JSON válido: INVALID_JSON, sem o texto do parser', async () => {
+      const res = await request(app.getHttpServer())
+        .post('/v1/authorize')
+        .set('Authorization', 'Bearer token-acme')
+        .set('Content-Type', 'application/json')
+        .send('{oops');
+
+      expect(res.status).toBe(400);
+      expect(res.body).toEqual({
+        error: {
+          code: 'BAD_REQUEST',
+          reason: 'INVALID_JSON',
+          message: 'O corpo da requisição não é um JSON válido.',
+        },
+      });
+    });
+
     it('organizationId ou userId que não é UUID', async () => {
       for (const res of [
         await authorize(users.bruno, [APPROVE], 'nao-e-uuid'),

@@ -105,8 +105,32 @@ export class IntegrationAuthorizationController {
   @ApiBadRequestResponse({
     type: ApiErrorResponse,
     description:
-      'Corpo fora do formato: ids que não são UUID, lista vazia ou com mais ' +
-      'de 25 itens, ou chave fora do formato recurso:ação.',
+      'Corpo que não é JSON válido (`INVALID_JSON`) ou fora do formato ' +
+      '(`INVALID_AUTHORIZATION_REQUEST`: ids que não são UUID, lista vazia ou ' +
+      'com mais de 25 itens; `INVALID_PERMISSION_KEY`: chave fora do formato ' +
+      'recurso:ação).',
+    examples: {
+      jsonInvalido: {
+        summary: 'Corpo que não é JSON válido',
+        value: {
+          error: {
+            code: 'BAD_REQUEST',
+            reason: 'INVALID_JSON',
+            message: 'O corpo da requisição não é um JSON válido.',
+          },
+        },
+      },
+      chaveForaDoFormato: {
+        summary: 'Chave fora do formato recurso:ação',
+        value: {
+          error: {
+            code: 'BAD_REQUEST',
+            reason: 'INVALID_PERMISSION_KEY',
+            message: 'Chave fora do formato recurso:ação: "Invoices:Approve".',
+          },
+        },
+      },
+    },
   })
   @ApiUnauthorizedResponse({
     type: ApiErrorResponse,
