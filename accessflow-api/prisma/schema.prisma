@@ -215,8 +215,8 @@ model AuditEvent {
   @@map("audit_events")
 }
 
-// Cada resposta 200 do POST /v1/authorize. O CHECK do results e o da
-// coerência do allowed estão na migration.
+// Cada resposta 200 do POST /v1/authorize. O CHECK do results, o da
+// coerência do allowed e os triggers de retenção estão nas migrations.
 model AuthorizationDecision {
   id             String   @id @default(uuid()) @db.Uuid
   // Sem FK: o KEY SHARE da FK faria o authorize esperar qualquer ação
@@ -236,6 +236,8 @@ model AuthorizationDecision {
   @@index([organizationId, decidedAt(sort: Desc), id(sort: Desc)])
   // O mesmo, filtrado por sujeito ("por que fulano foi negado?").
   @@index([organizationId, subjectUserId, decidedAt(sort: Desc), id(sort: Desc)], map: "authorization_decisions_organization_id_subject_user_id_idx")
+  // Expurgo: as vencidas, das mais antigas, sem percorrer a tabela.
+  @@index([decidedAt])
   @@map("authorization_decisions")
 }
 
@@ -245,8 +247,8 @@ enum SecurityActorType {
 }
 
 // Tentativas de acesso negadas. Sem FK em nenhuma coluna (motivo na
-// migration). O CHECK de coerência do ator e o do details estão na
-// migration. event é texto, validado no código.
+// migration). O CHECK de coerência do ator, o do details e os triggers de
+// retenção estão nas migrations. event é texto, validado no código.
 model SecurityEvent {
   id             String            @id @default(uuid()) @db.Uuid
   // Nulo em evento de máquina de client não cadastrado.
@@ -262,5 +264,7 @@ model SecurityEvent {
 
   // Listagem da organização, do mais recente para o mais antigo.
   @@index([organizationId, occurredAt(sort: Desc), id(sort: Desc)])
+  // Expurgo: os vencidos, dos mais antigos, sem percorrer a tabela.
+  @@index([occurredAt])
   @@map("security_events")
 }

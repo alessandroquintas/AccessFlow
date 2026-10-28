@@ -26,7 +26,7 @@ export async function describeInvitations(
   ]);
   const profileById = new Map(profiles.map((profile) => [profile.id, profile]));
 
-  return invitations.flatMap((invitation) => {
+  const result = invitations.flatMap((invitation) => {
     const profile = profileById.get(invitation.invitedByUserId);
     const role = roleById.get(invitation.roleId);
     return profile && role
@@ -39,4 +39,6 @@ export async function describeInvitations(
         ]
       : [];
   });
+
+  return result;
 }
