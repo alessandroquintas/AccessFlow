@@ -1,5 +1,5 @@
 import { SetMetadata } from '@nestjs/common';
-import type { MachineScope } from '../machine-scope';
+import type { MachineScope } from '@/shared/domain/machine-scope';
 
 export const REQUIRED_SCOPES_KEY = 'requiredScopes';
 

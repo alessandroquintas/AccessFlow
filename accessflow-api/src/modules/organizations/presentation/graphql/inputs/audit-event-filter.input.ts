@@ -14,7 +14,8 @@ export class AuditEventFilterInput {
 
   @Field(() => String, {
     nullable: true,
-    description: 'organization, member, invitation, role ou permission.',
+    description:
+      'organization, member, invitation, role, permission ou integration.',
   })
   targetType?: string | null;
 

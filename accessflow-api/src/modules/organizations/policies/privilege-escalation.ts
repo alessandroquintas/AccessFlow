@@ -1,5 +1,7 @@
+import { MachineScope } from '@/shared/domain/machine-scope';
 import { Role } from '../domain/entities/role.entity';
 import { PrivilegeEscalationError } from '../domain/errors/privilege-escalation.error';
+import { OrganizationPermission } from './organization-permission';
 
 /*
  * Anti-escalada de privilégio: quem age só concede, retira ou atribui
@@ -47,6 +49,33 @@ export function ensureCanAssignRole(
 /** inviteMember: P(viewer) cobre o papel com que o convidado entra. */
 export function ensureCanInviteWithRole(viewer: Role, role: Role): void {
   ensureCovers(viewer, role);
+}
+
+/**
+ * O que quem age precisa ter para conceder cada escopo a uma integração: a
+ * integração não pode ver mais do que quem a criou.
+ */
+export const PERMISSIONS_REQUIRED_BY_SCOPE: Record<
+  MachineScope,
+  readonly OrganizationPermission[]
+> = {
+  [MachineScope.MEMBERS_READ]: [OrganizationPermission.MEMBERS_READ],
+  // O authorize revela as permissões de qualquer membro.
+  [MachineScope.AUTHORIZE]: [
+    OrganizationPermission.MEMBERS_READ,
+    OrganizationPermission.ROLES_READ,
+  ],
+};
+
+/** createIntegrationClient: P(viewer) cobre o exigido por cada escopo. */
+export function ensureCanGrantScopes(
+  viewer: Role,
+  scopes: readonly MachineScope[],
+): void {
+  ensureGrantsAll(
+    viewer,
+    scopes.flatMap((scope) => PERMISSIONS_REQUIRED_BY_SCOPE[scope]),
+  );
 }
 
 function ensureCovers(viewer: Role, role: Role): void {

@@ -73,6 +73,14 @@ import { SecurityDenialRecorder } from '@/shared/application/ports/security-deni
 import { SecurityEventRecorder } from './application/services/security-event-recorder';
 import { ListSecurityEventsUseCase } from './application/use-cases/list-security-events.use-case';
 import { SecurityEventsResolver } from './presentation/graphql/resolvers/security-events.resolver';
+import { RequestContextPort } from '@/shared/application/ports/request-context.port';
+import { NestLogger } from '@/shared/infrastructure/logging/nest-logger';
+import { MachineClientProvisioner } from './application/ports/machine-client-provisioner.port';
+import { machineClientProvisionerProvider } from './infrastructure/cognito/machine-client-provisioner.provider';
+import { ListIntegrationClientsUseCase } from './application/use-cases/list-integration-clients.use-case';
+import { CreateIntegrationClientUseCase } from './application/use-cases/create-integration-client.use-case';
+import { RevokeIntegrationClientUseCase } from './application/use-cases/revoke-integration-client.use-case';
+import { IntegrationsResolver } from './presentation/graphql/resolvers/integrations.resolver';
 
 @Module({
   imports: [PrismaModule, IdentityModule, ClockModule, RequestContextModule],
@@ -104,6 +112,9 @@ import { SecurityEventsResolver } from './presentation/graphql/resolvers/securit
       useClass: PrismaAuthorizationDecisionLog,
     },
     { provide: SecurityEventLog, useClass: PrismaSecurityEventLog },
+
+    // Cognito (app clients das integrações)
+    machineClientProvisionerProvider,
 
     // Adaptador para o módulo Identity
     {
@@ -833,6 +844,91 @@ import { SecurityEventsResolver } from './presentation/graphql/resolvers/securit
         access: OrganizationAccessService,
       ) => new ListSecurityEventsUseCase(securityEvents, users, access),
     },
+    {
+      provide: ListIntegrationClientsUseCase,
+      inject: [
+        IntegrationClientRepository,
+        UserDirectoryPort,
+        OrganizationAccessService,
+      ],
+      useFactory: (
+        integrationClients: IntegrationClientRepository,
+        users: UserDirectoryPort,
+        access: OrganizationAccessService,
+      ) => new ListIntegrationClientsUseCase(integrationClients, users, access),
+    },
+    {
+      provide: CreateIntegrationClientUseCase,
+      inject: [
+        OrganizationRepository,
+        IntegrationClientRepository,
+        MachineClientProvisioner,
+        UserDirectoryPort,
+        OrganizationAccessService,
+        AuditLog,
+        TransactionManager,
+        ClockPort,
+        RequestContextPort,
+      ],
+      useFactory: (
+        organizations: OrganizationRepository,
+        integrationClients: IntegrationClientRepository,
+        machineClients: MachineClientProvisioner,
+        users: UserDirectoryPort,
+        access: OrganizationAccessService,
+        audit: AuditLog,
+        transactions: TransactionManager,
+        clock: ClockPort,
+        requestContext: RequestContextPort,
+      ) =>
+        new CreateIntegrationClientUseCase(
+          organizations,
+          integrationClients,
+          machineClients,
+          users,
+          access,
+          audit,
+          transactions,
+          clock,
+          new NestLogger('CreateIntegrationClient', requestContext),
+        ),
+    },
+    {
+      provide: RevokeIntegrationClientUseCase,
+      inject: [
+        OrganizationRepository,
+        IntegrationClientRepository,
+        MachineClientProvisioner,
+        UserDirectoryPort,
+        OrganizationAccessService,
+        AuditLog,
+        TransactionManager,
+        ClockPort,
+        RequestContextPort,
+      ],
+      useFactory: (
+        organizations: OrganizationRepository,
+        integrationClients: IntegrationClientRepository,
+        machineClients: MachineClientProvisioner,
+        users: UserDirectoryPort,
+        access: OrganizationAccessService,
+        audit: AuditLog,
+        transactions: TransactionManager,
+        clock: ClockPort,
+        requestContext: RequestContextPort,
+      ) =>
+        new RevokeIntegrationClientUseCase(
+          organizations,
+          integrationClients,
+          machineClients,
+          users,
+          access,
+          audit,
+          transactions,
+          clock,
+          new NestLogger('RevokeIntegrationClient', requestContext),
+        ),
+    },
     // Usado pelo filtro global, que grava as negações.
     {
       provide: SecurityDenialRecorder,
@@ -865,6 +961,7 @@ import { SecurityEventsResolver } from './presentation/graphql/resolvers/securit
     AuditResolver,
     AuthorizationDecisionsResolver,
     SecurityEventsResolver,
+    IntegrationsResolver,
   ],
   exports: [SecurityDenialRecorder],
 })

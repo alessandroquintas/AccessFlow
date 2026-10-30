@@ -12,7 +12,7 @@ import { Reflector } from '@nestjs/core';
 import type { AuthenticatedRequest } from '../authenticated-request';
 import { extractBearerToken } from '../bearer-token';
 import { REQUIRED_SCOPES_KEY } from '../decorators/require-scopes.decorator';
-import type { MachineScope } from '../machine-scope';
+import type { MachineScope } from '@/shared/domain/machine-scope';
 
 @Injectable()
 export class MachineAuthGuard implements CanActivate {

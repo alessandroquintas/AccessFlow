@@ -66,7 +66,7 @@ input AuditEventFilter {
   occurredTo: DateTime
   targetId: ID
 
-  """organization, member, invitation, role ou permission."""
+  """organization, member, invitation, role, permission ou integration."""
   targetType: String
 }
 
@@ -74,7 +74,7 @@ type AuditTarget {
   """Id do alvo: o userId para member e a chave para permission."""
   id: ID!
 
-  """organization, member, invitation, role ou permission."""
+  """organization, member, invitation, role, permission ou integration."""
   type: String!
 }
 
@@ -129,6 +129,16 @@ type AuthorizationDecisionResult {
   permission: String!
 }
 
+input CreateIntegrationClientInput {
+  """Nome (2 a 60 caracteres)."""
+  name: String!
+
+  """
+  Escopos de máquina (accessflow-api/members.read, accessflow-api/authorize); repetidos são ignorados. members.read exige members:read; authorize exige members:read e roles:read.
+  """
+  scopes: [String!]!
+}
+
 input CreateOrganizationInput {
   """Nome de exibição (2 a 100 caracteres)."""
   name: String!
@@ -159,10 +169,49 @@ input CreateRoleInput {
   permissions: [String!]!
 }
 
+type CreatedIntegrationClient {
+  """
+  Aparece só nesta resposta: não é guardado e não pode ser consultado de novo. Perdeu? Revogue e crie outra integração.
+  """
+  clientSecret: String!
+  integration: IntegrationClient!
+}
+
 """
 A date-time string at UTC, such as 2019-12-03T09:54:33Z, compliant with the date-time format.
 """
 scalar DateTime
+
+type IntegrationClient {
+  """client_id do app client no Cognito. Nulo em PROVISIONING e FAILED."""
+  clientId: String
+  createdAt: DateTime!
+
+  """Nulo nas integrações anteriores ao painel."""
+  createdBy: IntegrationCreator
+  id: ID!
+  name: String!
+  revokedAt: DateTime
+
+  """Escopos de máquina concedidos, na ordem do catálogo."""
+  scopes: [String!]!
+  status: IntegrationClientStatus!
+}
+
+"""
+PROVISIONING: em criação. ACTIVE: a única que autoriza. REVOKED: revogada. FAILED: o app client não chegou a existir.
+"""
+enum IntegrationClientStatus {
+  ACTIVE
+  FAILED
+  PROVISIONING
+  REVOKED
+}
+
+type IntegrationCreator {
+  name: String!
+  userId: ID!
+}
 
 type InvitationInviter {
   name: String!
@@ -215,6 +264,11 @@ type Mutation {
   """
   assignRole(input: AssignRoleInput!, organizationId: ID!): OrganizationMember!
 
+  """
+  Cria uma integração (app client de máquina no Cognito). O clientSecret aparece só nesta resposta. Até 5 em criação ou ativas por organização; só é possível conceder escopos cobertos pelas suas permissões. Exige integrations:manage.
+  """
+  createIntegrationClient(input: CreateIntegrationClientInput!, organizationId: ID!): CreatedIntegrationClient!
+
   """Cria uma organização. O usuário autenticado se torna OWNER."""
   createOrganization(input: CreateOrganizationInput!): Organization!
 
@@ -254,6 +308,11 @@ type Mutation {
 
   """Remove um membro da organização. Exige ser OWNER."""
   removeMember(organizationId: ID!, userId: ID!): Boolean!
+
+  """
+  Revoga uma integração ativa: os tokens dela deixam de autorizar na hora, e o app client é apagado no Cognito. Já revogada: true, sem mudança. Exige integrations:manage.
+  """
+  revokeIntegrationClient(integrationId: ID!, organizationId: ID!): Boolean!
 
   """Revoga um convite pendente, mesmo expirado. Exige members:invite."""
   revokeInvitation(invitationId: ID!, organizationId: ID!): Boolean!
@@ -404,6 +463,11 @@ type Query {
   Respostas 200 do POST /v1/authorize na organização, da mais recente para a mais antiga. Exige audit:read.
   """
   authorizationDecisions(after: String, filter: AuthorizationDecisionFilter, first: Int, organizationId: ID!): AuthorizationDecisionConnection!
+
+  """
+  Integrações da organização, em qualquer status, da mais nova à mais antiga. Exige integrations:read.
+  """
+  integrationClients(organizationId: ID!): [IntegrationClient!]!
 
   """Perfil do usuário autenticado."""
   me: User!

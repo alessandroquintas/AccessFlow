@@ -30,6 +30,8 @@ enum MembershipStatus {
 enum IntegrationClientStatus {
   ACTIVE
   REVOKED
+  PROVISIONING
+  FAILED
 }
 
 enum InvitationStatus {
@@ -108,16 +110,28 @@ model RolePermission {
   @@map("role_permissions")
 }
 
+// Vínculo de um app client do Cognito a uma organização. O CHECK de
+// coerência do status com client_id e revoked_at está na migration.
 model IntegrationClient {
-  id             String                  @id @default(uuid()) @db.Uuid
-  clientId       String                  @unique @map("client_id")
-  organizationId String                  @map("organization_id") @db.Uuid
-  name           String
-  status         IntegrationClientStatus @default(ACTIVE)
-  createdAt      DateTime                @default(now()) @map("created_at") @db.Timestamptz(3)
-  updatedAt      DateTime                @updatedAt @map("updated_at") @db.Timestamptz(3)
+  id              String                  @id @default(uuid()) @db.Uuid
+  // Nulo enquanto PROVISIONING e em FAILED; o unique ignora os nulos.
+  clientId        String?                 @unique @map("client_id")
+  organizationId  String                  @map("organization_id") @db.Uuid
+  name            String
+  // Escopos de máquina concedidos; o catálogo é validado no código.
+  scopes          String[]
+  // O padrão continua ACTIVE: um valor de enum novo não pode ser usado na
+  // migration que o cria. O código sempre informa o status.
+  status          IntegrationClientStatus @default(ACTIVE)
+  createdByUserId String?                 @map("created_by_user_id") @db.Uuid
+  revokedAt       DateTime?               @map("revoked_at") @db.Timestamptz(3)
+  revokedByUserId String?                 @map("revoked_by_user_id") @db.Uuid
+  createdAt       DateTime                @default(now()) @map("created_at") @db.Timestamptz(3)
+  updatedAt       DateTime                @updatedAt @map("updated_at") @db.Timestamptz(3)
 
   organization Organization @relation(fields: [organizationId], references: [id], onDelete: Restrict)
+  createdBy    User?        @relation("IntegrationClientCreatedBy", fields: [createdByUserId], references: [id], onDelete: Restrict)
+  revokedBy    User?        @relation("IntegrationClientRevokedBy", fields: [revokedByUserId], references: [id], onDelete: Restrict)
 
   @@index([organizationId])
   @@map("integration_clients")
@@ -180,6 +194,9 @@ model User {
   auditEvents     AuditEvent[]
 
   // inviteMember (ALREADY_MEMBER) e myInvitations buscam por e-mail.
+  createdIntegrationClients IntegrationClient[] @relation("IntegrationClientCreatedBy")
+  revokedIntegrationClients IntegrationClient[] @relation("IntegrationClientRevokedBy")
+
   @@index([email])
   @@map("users")
 }

@@ -18,6 +18,8 @@ export const AuditAction = {
   PERMISSION_CREATED: 'permission.created',
   PERMISSION_UPDATED: 'permission.updated',
   PERMISSION_DELETED: 'permission.deleted',
+  INTEGRATION_CREATED: 'integration.created',
+  INTEGRATION_REVOKED: 'integration.revoked',
 } as const;
 
 export type AuditAction = (typeof AuditAction)[keyof typeof AuditAction];
@@ -28,6 +30,7 @@ export const AuditTargetType = {
   INVITATION: 'invitation',
   ROLE: 'role',
   PERMISSION: 'permission',
+  INTEGRATION: 'integration',
 } as const;
 
 export type AuditTargetType =
@@ -51,6 +54,8 @@ export const TARGET_TYPE_BY_ACTION: Record<AuditAction, AuditTargetType> = {
   'permission.created': AuditTargetType.PERMISSION,
   'permission.updated': AuditTargetType.PERMISSION,
   'permission.deleted': AuditTargetType.PERMISSION,
+  'integration.created': AuditTargetType.INTEGRATION,
+  'integration.revoked': AuditTargetType.INTEGRATION,
 };
 
 const ACTIONS: ReadonlySet<string> = new Set(Object.values(AuditAction));
@@ -125,6 +130,9 @@ export interface AuditDetailsByAction {
   'permission.created': { key: string; description: string };
   'permission.updated': { changes: { description: AuditChange<string> } };
   'permission.deleted': { key: string };
+  /** Nunca o client_secret: ele não chega ao domínio. */
+  'integration.created': { name: string; scopes: string[]; clientId: string };
+  'integration.revoked': { clientId: string };
 }
 
 // Falha de compilação se uma ação do catálogo ficar sem tipo de details.

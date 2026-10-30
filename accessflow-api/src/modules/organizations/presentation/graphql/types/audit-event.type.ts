@@ -32,7 +32,8 @@ export class AuditActorGqlType {
 @ObjectType('AuditTarget')
 export class AuditTargetGqlType {
   @Field({
-    description: 'organization, member, invitation, role ou permission.',
+    description:
+      'organization, member, invitation, role, permission ou integration.',
   })
   type!: string;
 

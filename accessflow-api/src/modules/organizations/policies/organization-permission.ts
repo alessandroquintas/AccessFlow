@@ -11,6 +11,8 @@ export const OrganizationPermission = {
   ROLES_ASSIGN: 'roles:assign',
   PERMISSIONS_MANAGE: 'permissions:manage',
   AUDIT_READ: 'audit:read',
+  INTEGRATIONS_READ: 'integrations:read',
+  INTEGRATIONS_MANAGE: 'integrations:manage',
 } as const;
 
 export type OrganizationPermission =
@@ -32,6 +34,8 @@ const DESCRIPTION_BY_PERMISSION: Record<OrganizationPermission, string> = {
   'roles:assign': 'Trocar o papel de um membro',
   'permissions:manage': 'Criar, editar e excluir permissões personalizadas',
   'audit:read': 'Ver o registro de auditoria',
+  'integrations:read': 'Ver as integrações e os escopos de cada uma',
+  'integrations:manage': 'Criar e revogar integrações',
 };
 
 /** O catálogo como o front exibe, na ordem de OrganizationPermission. */

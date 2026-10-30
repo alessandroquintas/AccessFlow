@@ -22,7 +22,7 @@ import type { AuthenticatedMachine } from '@/modules/identity/application/ports/
 import { MachineAuthGuard } from '@/modules/identity/presentation/auth/guards/machine-auth.guard';
 import { RequireScopes } from '@/modules/identity/presentation/auth/decorators/require-scopes.decorator';
 import { CurrentMachine } from '@/modules/identity/presentation/auth/decorators/current-machine.decorator';
-import { MachineScope } from '@/modules/identity/presentation/auth/machine-scope';
+import { MachineScope } from '@/shared/domain/machine-scope';
 import { AuthorizeForIntegrationUseCase } from '@/modules/organizations/application/use-cases/authorize-for-integration.use-case';
 import { ApiErrorResponse } from '@/shared/presentation/http/api-error.response';
 import { MACHINE_TOKEN_SECURITY } from '@/shared/presentation/http/swagger';
