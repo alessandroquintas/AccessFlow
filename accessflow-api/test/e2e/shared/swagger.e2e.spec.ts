@@ -1,3 +1,4 @@
+import { Script } from 'node:vm';
 import { afterAll, beforeAll, describe, expect, it } from 'vitest';
 import type { INestApplication } from '@nestjs/common';
 import { Test } from '@nestjs/testing';
@@ -7,6 +8,35 @@ import { EnvService } from '@/config/env.service';
 import { setupSwagger } from '@/shared/presentation/http/swagger';
 
 const MEMBER_PATH = '/v1/organizations/{organizationId}/members/{userId}';
+
+/**
+ * Roda o swagger-ui-init.js num contexto isolado, como o navegador faria, e
+ * devolve o documento que ele entrega ao Swagger UI. Lança SyntaxError se o
+ * script não for JavaScript válido.
+ */
+function embeddedDocument(initJs: string): unknown {
+  const script = new Script(initJs, { filename: 'swagger-ui-init.js' });
+  let options: { spec?: unknown } = {};
+  const SwaggerUIBundle = Object.assign(
+    (received: { spec?: unknown }) => {
+      options = received;
+      return { initOAuth: () => undefined, authActions: {} };
+    },
+    { presets: { apis: {} }, plugins: { DownloadUrl: {} } },
+  );
+  const window: { location: object; onload?: () => void } = {
+    location: { search: '', origin: 'http://localhost' },
+  };
+
+  script.runInNewContext({
+    window,
+    SwaggerUIBundle,
+    SwaggerUIStandalonePreset: {},
+  });
+  window.onload?.();
+  // Sai do contexto isolado como dado comum, para comparar com o /docs-json.
+  return JSON.parse(JSON.stringify(options.spec)) as unknown;
+}
 
 // O Swagger precisa ser montado antes do init: depois dele, o 404 padrão do
 // Nest já está registrado e as rotas novas nunca seriam alcançadas.
@@ -164,6 +194,19 @@ describe('Swagger (e2e)', () => {
       expect(ui.status).toBe(200);
       expect(ui.headers['content-type']).toContain('text/html');
       expect(yaml.status).toBe(404);
+    });
+
+    it('o /docs/swagger-ui-init.js é JavaScript válido e embute o mesmo documento do /docs-json', async () => {
+      const res = await request(app.getHttpServer()).get(
+        '/docs/swagger-ui-init.js',
+      );
+
+      expect(res.status).toBe(200);
+      const embedded = embeddedDocument(res.text) as typeof spec;
+      expect(embedded.info.description).toBe(spec.info.description);
+      // O documento inteiro: qualquer `$` especial em descrição ou exemplo
+      // mudaria o texto embutido, mesmo sem quebrar a sintaxe.
+      expect(embedded).toEqual(spec);
     });
   });
 

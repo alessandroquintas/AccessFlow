@@ -13,13 +13,20 @@ export const MACHINE_TOKEN_SECURITY = 'machine-token';
 export function setupSwagger(app: INestApplication, env: EnvService): void {
   if (env.get('NODE_ENV') === 'production') return;
 
+  // Nenhuma descrição ou exemplo do documento pode ter cifrão seguido de
+  // crase, aspa simples, & ou outro cifrão. O @nestjs/swagger embute o
+  // documento no swagger-ui-init.js com String.replace, que interpreta essas
+  // sequências na substituição: cifrão e crase, por exemplo, colam o trecho
+  // do template antes do marcador no meio do JSON, e o /docs abre em branco.
+  // O /docs-json não passa por esse replace. O swagger.e2e compara os dois.
   const config = new DocumentBuilder()
     .setTitle('AccessFlow API — Integrações')
     .setDescription(
       'Rotas REST para sistemas externos vinculados a uma organização. ' +
         'Cada rota exige um token de máquina com o escopo indicado nela. ' +
         'Toda resposta traz o cabeçalho `X-Request-Id`: o enviado pelo ' +
-        'cliente, se casar com `^[A-Za-z0-9._-]{8,64}$`, ou um UUID gerado.',
+        'cliente, se tiver de 8 a 64 caracteres entre letras, dígitos, ' +
+        'ponto, sublinhado e hífen, ou um UUID gerado.',
     )
     .setVersion('v1')
     // Sem OAuth2 no Swagger UI: o client_secret nunca vai para o navegador.
