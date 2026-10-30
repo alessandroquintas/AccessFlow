@@ -1,3 +1,4 @@
+import { restoreFromStorage } from '@/shared/domain/restore-from-storage';
 import { randomUUID } from 'node:crypto';
 import { InvalidUserError } from '../errors/invalid-user.error';
 import { Email } from '@/shared/domain/value-objects/email.vo';
@@ -31,7 +32,7 @@ export class User {
     input: { cognitoSub: string; name: string; email: string },
     now: Date = new Date(),
   ): User {
-    return User.restore({
+    return User.build({
       id: randomUUID(),
       cognitoSub: input.cognitoSub,
       name: input.name,
@@ -42,7 +43,16 @@ export class User {
     });
   }
 
+  /**
+   * A partir do banco. Dado que não passa nas regras é corrupção: Error
+   * comum (500), e não DomainError (400).
+   */
   static restore(props: UserProps): User {
+    return restoreFromStorage('User', () => User.build(props));
+  }
+
+  /** As regras da entidade; falha com DomainError. */
+  private static build(props: UserProps): User {
     if (!props.id?.trim()) throw new InvalidUserError('id é obrigatório.');
     if (!props.cognitoSub?.trim())
       throw new InvalidUserError('cognitoSub é obrigatório.');

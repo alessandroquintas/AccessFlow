@@ -1,5 +1,9 @@
 import { Injectable } from '@nestjs/common';
-import { InvitationStatus as PrismaInvitationStatus } from '@prisma/client';
+import {
+  Prisma,
+  InvitationStatus as PrismaInvitationStatus,
+  type Invitation as PrismaInvitation,
+} from '@prisma/client';
 import { TransactionManager } from '@/shared/application/ports/transaction-manager.port';
 import { PrismaClientProvider } from '@/shared/infrastructure/database/prisma-client.provider';
 import { Invitation } from '@/modules/organizations/domain/entities/invitation.entity';
@@ -105,21 +109,30 @@ export class PrismaInvitationRepository extends InvitationRepository {
     organizationId: string,
     { first, after }: { first: number; after?: InvitationCursor },
   ): Promise<InvitationPage> {
+    // Comparação de linha, como no auditEvents, e não o OR de antes: o
+    // cursor entra no Index Cond de (organization_id, status, created_at, id)
+    // e a página começa direto nele.
+    const cursor = after
+      ? Prisma.sql`AND (created_at, id) < (${after.createdAt}::timestamptz, ${after.id}::uuid)`
+      : Prisma.empty;
+
     // Um item a mais indica se existe próxima página, sem precisar de count.
-    const records = await this.clients.current().invitation.findMany({
-      where: {
-        organizationId,
-        status: PrismaInvitationStatus.PENDING,
-        ...(after && {
-          OR: [
-            { createdAt: { lt: after.createdAt } },
-            { createdAt: after.createdAt, id: { lt: after.id } },
-          ],
-        }),
-      },
-      orderBy: [{ createdAt: 'desc' }, { id: 'desc' }],
-      take: first + 1,
-    });
+    const records = await this.clients.current().$queryRaw<PrismaInvitation[]>`
+      SELECT id,
+             organization_id AS "organizationId",
+             email,
+             role_id AS "roleId",
+             status,
+             invited_by_user_id AS "invitedByUserId",
+             expires_at AS "expiresAt",
+             created_at AS "createdAt",
+             updated_at AS "updatedAt"
+      FROM invitations
+      WHERE organization_id = ${organizationId}::uuid
+        AND status = ${PrismaInvitationStatus.PENDING}::"InvitationStatus"
+        ${cursor}
+      ORDER BY created_at DESC, id DESC
+      LIMIT ${first + 1}`;
 
     return {
       items: records.slice(0, first).map(PrismaInvitationMapper.toDomain),

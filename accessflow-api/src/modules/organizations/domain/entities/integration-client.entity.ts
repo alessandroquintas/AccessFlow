@@ -1,3 +1,4 @@
+import { restoreFromStorage } from '@/shared/domain/restore-from-storage';
 import { InvalidIntegrationClientError } from '../errors/invalid-integration-client.error';
 
 export const IntegrationClientStatus = {
@@ -23,7 +24,18 @@ export interface IntegrationClientProps {
 export class IntegrationClient {
   private constructor(private readonly props: IntegrationClientProps) {}
 
+  /**
+   * A partir do banco. Dado que não passa nas regras é corrupção: Error
+   * comum (500), e não DomainError (400).
+   */
   static restore(props: IntegrationClientProps): IntegrationClient {
+    return restoreFromStorage('IntegrationClient', () =>
+      IntegrationClient.build(props),
+    );
+  }
+
+  /** As regras da entidade; falha com DomainError. */
+  private static build(props: IntegrationClientProps): IntegrationClient {
     const { id, clientId, organizationId } = props;
 
     if (!id?.trim()) {

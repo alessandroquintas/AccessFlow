@@ -1,3 +1,4 @@
+import { restoreFromStorage } from '@/shared/domain/restore-from-storage';
 import { randomUUID } from 'node:crypto';
 import { InvalidRoleError } from '../errors/invalid-role.error';
 import { SystemRoleImmutableError } from '../errors/system-role-immutable.error';
@@ -67,7 +68,7 @@ export class Role {
       name: string,
       permissions: readonly string[],
     ) =>
-      Role.restore({
+      Role.build({
         id: randomUUID(),
         organizationId,
         name,
@@ -102,7 +103,7 @@ export class Role {
     catalog: PermissionCatalog,
     now: Date,
   ): Role {
-    return Role.restore({
+    return Role.build({
       id: randomUUID(),
       organizationId: input.organizationId,
       name: RoleName.create(input.name).value,
@@ -115,7 +116,16 @@ export class Role {
     });
   }
 
+  /**
+   * A partir do banco. Dado que não passa nas regras é corrupção: Error
+   * comum (500), e não DomainError (400).
+   */
   static restore(props: RoleProps): Role {
+    return restoreFromStorage('Role', () => Role.build(props));
+  }
+
+  /** As regras da entidade; falha com DomainError. */
+  private static build(props: RoleProps): Role {
     const { id, organizationId } = props;
 
     if (!id?.trim()) {

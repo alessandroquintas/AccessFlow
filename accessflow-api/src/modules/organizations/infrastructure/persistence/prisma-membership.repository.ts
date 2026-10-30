@@ -1,7 +1,9 @@
 import { Injectable } from '@nestjs/common';
 import {
+  Prisma,
   MembershipStatus as PrismaMembershipStatus,
   RoleSystemKey as PrismaRoleSystemKey,
+  type Membership as PrismaMembership,
 } from '@prisma/client';
 import { TransactionManager } from '@/shared/application/ports/transaction-manager.port';
 import { PrismaClientProvider } from '@/shared/infrastructure/database/prisma-client.provider';
@@ -56,21 +58,28 @@ export class PrismaMembershipRepository extends MembershipRepository {
     organizationId: string,
     { first, after }: { first: number; after?: MembershipCursor },
   ): Promise<MembershipPage> {
+    // Comparação de linha, como no auditEvents, e não o OR de antes: o
+    // cursor entra no Index Cond de (organization_id, created_at, id) e a
+    // página começa direto nele.
+    const cursor = after
+      ? Prisma.sql`AND (created_at, id) > (${after.createdAt}::timestamptz, ${after.id}::uuid)`
+      : Prisma.empty;
+
     // Um item a mais indica se existe próxima página, sem precisar de count.
-    const records = await this.clients.current().membership.findMany({
-      where: {
-        organizationId,
-        status: PrismaMembershipStatus.ACTIVE,
-        ...(after && {
-          OR: [
-            { createdAt: { gt: after.createdAt } },
-            { createdAt: after.createdAt, id: { gt: after.id } },
-          ],
-        }),
-      },
-      orderBy: [{ createdAt: 'asc' }, { id: 'asc' }],
-      take: first + 1,
-    });
+    const records = await this.clients.current().$queryRaw<PrismaMembership[]>`
+      SELECT id,
+             organization_id AS "organizationId",
+             user_id AS "userId",
+             role_id AS "roleId",
+             status,
+             created_at AS "createdAt",
+             updated_at AS "updatedAt"
+      FROM memberships
+      WHERE organization_id = ${organizationId}::uuid
+        AND status = ${PrismaMembershipStatus.ACTIVE}::"MembershipStatus"
+        ${cursor}
+      ORDER BY created_at, id
+      LIMIT ${first + 1}`;
 
     return {
       items: records.slice(0, first).map(PrismaMembershipMapper.toDomain),

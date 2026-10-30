@@ -1,3 +1,4 @@
+import { restoreFromStorage } from '@/shared/domain/restore-from-storage';
 import { randomUUID } from 'node:crypto';
 import { Email } from '@/shared/domain/value-objects/email.vo';
 import { InvalidInvitationError } from '../errors/invalid-invitation.error';
@@ -49,7 +50,7 @@ export class Invitation {
     },
     now: Date,
   ): Invitation {
-    return Invitation.restore({
+    return Invitation.build({
       id: randomUUID(),
       ...input,
       status: InvitationStatus.PENDING,
@@ -59,7 +60,16 @@ export class Invitation {
     });
   }
 
+  /**
+   * A partir do banco. Dado que não passa nas regras é corrupção: Error
+   * comum (500), e não DomainError (400).
+   */
   static restore(props: InvitationProps): Invitation {
+    return restoreFromStorage('Invitation', () => Invitation.build(props));
+  }
+
+  /** As regras da entidade; falha com DomainError. */
+  private static build(props: InvitationProps): Invitation {
     const { id, organizationId, roleId, invitedByUserId } = props;
 
     if (!id?.trim()) {

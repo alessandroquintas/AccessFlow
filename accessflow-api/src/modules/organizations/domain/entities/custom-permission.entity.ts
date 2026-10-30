@@ -1,3 +1,4 @@
+import { restoreFromStorage } from '@/shared/domain/restore-from-storage';
 import { randomUUID } from 'node:crypto';
 import { InvalidCustomPermissionError } from '../errors/invalid-custom-permission.error';
 import { ReservedPermissionResourceError } from '../errors/reserved-permission-resource.error';
@@ -43,7 +44,7 @@ export class CustomPermission {
       );
     }
 
-    return CustomPermission.restore({
+    return CustomPermission.build({
       id: randomUUID(),
       organizationId: input.organizationId,
       key: key.value,
@@ -53,7 +54,18 @@ export class CustomPermission {
     });
   }
 
+  /**
+   * A partir do banco. Dado que não passa nas regras é corrupção: Error
+   * comum (500), e não DomainError (400).
+   */
   static restore(props: CustomPermissionProps): CustomPermission {
+    return restoreFromStorage('CustomPermission', () =>
+      CustomPermission.build(props),
+    );
+  }
+
+  /** As regras da entidade; falha com DomainError. */
+  private static build(props: CustomPermissionProps): CustomPermission {
     if (!props.id?.trim()) {
       throw new InvalidCustomPermissionError('id é obrigatório.');
     }

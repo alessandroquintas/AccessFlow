@@ -1,3 +1,4 @@
+import { restoreFromStorage } from '@/shared/domain/restore-from-storage';
 import { randomUUID } from 'node:crypto';
 import { InvalidMembershipError } from '../errors/invalid-membership.error';
 
@@ -27,7 +28,7 @@ export class Membership {
     input: { organizationId: string; userId: string; roleId: string },
     now: Date = new Date(),
   ): Membership {
-    return Membership.restore({
+    return Membership.build({
       id: randomUUID(),
       status: MembershipStatus.ACTIVE,
       createdAt: now,
@@ -36,7 +37,16 @@ export class Membership {
     });
   }
 
+  /**
+   * A partir do banco. Dado que não passa nas regras é corrupção: Error
+   * comum (500), e não DomainError (400).
+   */
   static restore(props: MembershipProps): Membership {
+    return restoreFromStorage('Membership', () => Membership.build(props));
+  }
+
+  /** As regras da entidade; falha com DomainError. */
+  private static build(props: MembershipProps): Membership {
     const { id, organizationId, userId, roleId } = props;
 
     if (!id?.trim()) {

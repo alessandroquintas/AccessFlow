@@ -12,6 +12,7 @@ import { OrganizationsModule } from './modules/organizations/organizations.modul
 import { RequestContextModule } from './shared/infrastructure/request-context/request-context.module';
 import { RequestContextPort } from './shared/application/ports/request-context.port';
 import { RequestIdMiddleware } from './shared/presentation/http/request-id.middleware';
+import { HealthModule } from './shared/infrastructure/health/health.module';
 
 @Module({
   imports: [
@@ -32,6 +33,7 @@ import { RequestIdMiddleware } from './shared/presentation/http/request-id.middl
     RequestContextModule,
     IdentityModule,
     OrganizationsModule,
+    HealthModule,
   ],
   providers: [
     // Traduz os erros; o filtro global grava as negações e repassa a ele.

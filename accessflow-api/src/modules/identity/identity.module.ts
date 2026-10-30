@@ -39,7 +39,7 @@ import { MachineAuthGuard } from './presentation/auth/guards/machine-auth.guard'
       useFactory: (env: EnvService) =>
         new CognitoMachineTokenVerifier({
           userPoolId: env.get('COGNITO_USER_POOL_ID'),
-          clientIds: env.get('COGNITO_MACHINE_CLIENT_IDS'),
+          userClientIds: env.get('COGNITO_CLIENT_IDS'),
         }),
     },
     {

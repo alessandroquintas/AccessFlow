@@ -1,5 +1,9 @@
 import { DomainError } from '@/shared/domain/errors/domain.error';
 import { InvalidJsonError } from '@/shared/application/errors/invalid-json.error';
+import { MalformedUriError } from '@/shared/application/errors/malformed-uri.error';
+import { PayloadTooLargeError } from '@/shared/application/errors/payload-too-large.error';
+import { RouteNotFoundError } from '@/shared/application/errors/route-not-found.error';
+import { UnsupportedMediaTypeError } from '@/shared/application/errors/unsupported-media-type.error';
 import { RequestContextPort } from '@/shared/application/ports/request-context.port';
 import {
   ArgumentsHost,
@@ -9,6 +13,7 @@ import {
   HttpStatus,
   IntrinsicException,
   Logger,
+  NotFoundException,
   Optional,
 } from '@nestjs/common';
 import type { HttpServer } from '@nestjs/common';
@@ -39,6 +44,14 @@ const CONFLICT: ErrorOutput = { code: 'CONFLICT', status: HttpStatus.CONFLICT };
 const BAD_REQUEST: ErrorOutput = {
   code: 'BAD_REQUEST',
   status: HttpStatus.BAD_REQUEST,
+};
+const PAYLOAD_TOO_LARGE: ErrorOutput = {
+  code: 'PAYLOAD_TOO_LARGE',
+  status: HttpStatus.PAYLOAD_TOO_LARGE,
+};
+const UNSUPPORTED_MEDIA_TYPE: ErrorOutput = {
+  code: 'UNSUPPORTED_MEDIA_TYPE',
+  status: HttpStatus.UNSUPPORTED_MEDIA_TYPE,
 };
 
 const OUTPUT_BY_DOMAIN_CODE: Record<string, ErrorOutput> = {
@@ -77,6 +90,10 @@ const OUTPUT_BY_DOMAIN_CODE: Record<string, ErrorOutput> = {
   INVALID_CUSTOM_PERMISSION: BAD_REQUEST,
   INVALID_AUTHORIZATION_REQUEST: BAD_REQUEST,
   INVALID_JSON: BAD_REQUEST,
+  MALFORMED_URI: BAD_REQUEST,
+  ROUTE_NOT_FOUND: NOT_FOUND,
+  PAYLOAD_TOO_LARGE,
+  UNSUPPORTED_MEDIA_TYPE,
   INVALID_AUDIT_FILTER: BAD_REQUEST,
 };
 
@@ -113,10 +130,49 @@ function isInvalidJsonBody(
   return isJson && hasBody && request?.body === undefined;
 }
 
+/** Status de um erro do body-parser (http-errors), se for um. */
+function httpErrorStatus(error: unknown): number | undefined {
+  if (typeof error !== 'object' || error === null) return undefined;
+  const { status } = error as { status?: unknown };
+  return typeof status === 'number' ? status : undefined;
+}
+
+/**
+ * Erros de transporte, de antes da aplicação, no formato padrão e sem a
+ * mensagem de quem os gerou (o parser repete pedaços do corpo, e o 404 do
+ * Nest repete o caminho):
+ * - corpo JSON ilegível: INVALID_JSON (ver isInvalidJsonBody);
+ * - URI malformada: o Nest troca o URIError do roteador por um
+ *   BadRequestException, a mesma classe do JSON ilegível. A aplicação não
+ *   lança BadRequestException, então o que sobra é a URI;
+ * - rota inexistente: o Nest lança NotFoundException; a aplicação também não;
+ * - 413 e 415 do body-parser: limite do corpo, Content-Encoding ou charset.
+ */
+function translateTransportError(
+  exception: unknown,
+  request: IncomingRequest | undefined,
+): unknown {
+  if (exception instanceof BadRequestException) {
+    return isInvalidJsonBody(exception, request)
+      ? new InvalidJsonError()
+      : new MalformedUriError();
+  }
+  if (exception instanceof NotFoundException) return new RouteNotFoundError();
+
+  switch (httpErrorStatus(exception)) {
+    case HttpStatus.PAYLOAD_TOO_LARGE:
+      return new PayloadTooLargeError();
+    case HttpStatus.UNSUPPORTED_MEDIA_TYPE:
+      return new UnsupportedMediaTypeError();
+    default:
+      return exception;
+  }
+}
+
 /**
  * Traduz DomainError para GraphQL e HTTP. Em HTTP também mascara erros
- * inesperados e responde JSON inválido no formato padrão; as demais
- * HttpException do Nest (ex.: rota inexistente) seguem o padrão do Nest.
+ * inesperados e responde os erros de transporte no formato padrão (ver
+ * translateTransportError); as demais HttpException seguem o padrão do Nest.
  * O erro inesperado vai para o log com o id de correlação da requisição.
  */
 @Catch()
@@ -165,10 +221,7 @@ export class DomainErrorFilter extends BaseExceptionFilter {
     const request = http.getRequest<IncomingRequest | undefined>();
     const response = http.getResponse<unknown>();
     const requestId = this.requestIdFor(request, response);
-    // Sem o texto do parser: ele repete pedaços do corpo recebido.
-    const error = isInvalidJsonBody(exception, request)
-      ? new InvalidJsonError()
-      : exception;
+    const error = translateTransportError(exception, request);
 
     if (error instanceof HttpException || this.isHttpError(error)) {
       return super.catch(error, host);

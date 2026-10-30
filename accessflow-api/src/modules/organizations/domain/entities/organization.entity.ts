@@ -1,3 +1,4 @@
+import { restoreFromStorage } from '@/shared/domain/restore-from-storage';
 import { randomUUID } from 'node:crypto';
 import { OrganizationName } from '../value-objects/organization-name.vo';
 import { Slug } from '../value-objects/slug.vo';
@@ -42,7 +43,16 @@ export class Organization {
     });
   }
 
+  /**
+   * A partir do banco. Dado que não passa nas regras é corrupção: Error
+   * comum (500), e não DomainError (400).
+   */
   static restore(props: OrganizationProps): Organization {
+    return restoreFromStorage('Organization', () => Organization.build(props));
+  }
+
+  /** As regras da entidade; falha com DomainError. */
+  private static build(props: OrganizationProps): Organization {
     const { id, name, slug } = props;
 
     if (!id?.trim()) {
