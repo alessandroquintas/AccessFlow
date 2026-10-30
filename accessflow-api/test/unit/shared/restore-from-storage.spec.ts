@@ -177,14 +177,27 @@ describe.each([
     restore: () =>
       IntegrationClient.restore({
         id: ID,
-        clientId: ' ',
         organizationId: ID,
+        clientId: null,
         name: 'ERP',
-        status: 'ACTIVE',
+        scopes: ['accessflow-api/fora-do-catalogo' as never],
+        status: 'PROVISIONING',
+        createdByUserId: ID,
+        revokedAt: null,
+        revokedByUserId: null,
         createdAt: NOW,
         updatedAt: NOW,
       }),
-    create: null,
+    create: () =>
+      IntegrationClient.create(
+        {
+          organizationId: ID,
+          name: 'ERP',
+          scopes: ['accessflow-api/fora-do-catalogo'],
+          createdByUserId: ID,
+        },
+        NOW,
+      ),
   },
 ])('$entity', ({ entity, restore, create }) => {
   it('restore de dado corrompido: Error comum, não DomainError', () => {
@@ -196,10 +209,7 @@ describe.each([
     );
   });
 
-  it.runIf(create)(
-    'create com a mesma entrada inválida: DomainError, como antes',
-    () => {
-      expect(thrown(create!)).toBeInstanceOf(DomainError);
-    },
-  );
+  it('create com a mesma entrada inválida: DomainError, como antes', () => {
+    expect(thrown(create)).toBeInstanceOf(DomainError);
+  });
 });

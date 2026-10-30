@@ -132,7 +132,7 @@ describe('Trilha de auditoria (e2e)', () => {
   }
 
   /**
-   * Fluxo administrativo com as 16 ações, um passo por segundo. Devolve os
+   * Fluxo administrativo com as 18 ações, um passo por segundo. Devolve os
    * ids que os testes usam.
    */
   async function runFlow() {
@@ -235,7 +235,25 @@ describe('Trilha de auditoria (e2e)', () => {
       { orgId, userId: eva.id },
       as('ana'),
     );
-    return { financeId, memberRoleId, brunoInvitation, evaId: eva.id };
+    const { integration } = await ok<{
+      integration: { id: string; clientId: string };
+    }>(
+      `mutation C($orgId: ID!) { createIntegrationClient(organizationId: $orgId, input: { name: "ERP", scopes: ["accessflow-api/members.read"] }) { integration { id clientId } } }`,
+      { orgId },
+      as('ana'),
+    );
+    await ok(
+      `mutation R($orgId: ID!, $id: ID!) { revokeIntegrationClient(organizationId: $orgId, integrationId: $id) }`,
+      { orgId, id: integration.id },
+      as('ana'),
+    );
+    return {
+      financeId,
+      memberRoleId,
+      brunoInvitation,
+      evaId: eva.id,
+      integration,
+    };
   }
 
   /** As ações do fluxo, da mais antiga para a mais recente. */
@@ -260,10 +278,13 @@ describe('Trilha de auditoria (e2e)', () => {
     'invitation.created',
     'invitation.accepted',
     'member.removed',
+    'integration.created',
+    'integration.revoked',
   ];
 
   it('o fluxo administrativo gera a trilha esperada, do mais recente para o mais antigo', async () => {
-    const { financeId, memberRoleId, brunoInvitation } = await runFlow();
+    const { financeId, memberRoleId, brunoInvitation, integration } =
+      await runFlow();
 
     const { nodes, pageInfo } = await audit();
 
@@ -303,6 +324,19 @@ describe('Trilha de auditoria (e2e)', () => {
     expect(byAction('permission.deleted')[0].target).toEqual({
       type: 'permission',
       id: 'invoices:approve',
+    });
+    const [created] = byAction('integration.created');
+    expect(created).toMatchObject({
+      actor: { type: 'USER', userId: ana.id, name: 'Ana', clientId: null },
+      target: { type: 'integration', id: integration.id },
+    });
+    expect(JSON.parse(created.details)).toEqual({
+      name: 'ERP',
+      scopes: ['accessflow-api/members.read'],
+      clientId: integration.clientId,
+    });
+    expect(JSON.parse(byAction('integration.revoked')[0].details)).toEqual({
+      clientId: integration.clientId,
     });
     expect(nodes.map((n) => n.occurredAt)).toEqual(
       [...nodes.map((n) => n.occurredAt)].sort().reverse(),

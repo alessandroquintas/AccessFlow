@@ -1,3 +1,4 @@
+import { MachineScope } from '@/shared/domain/machine-scope';
 import { beforeEach, describe, expect, it } from 'vitest';
 import {
   Organization,
@@ -70,7 +71,11 @@ function addClient(
       clientId,
       organizationId,
       name: clientId,
+      scopes: Object.values(MachineScope),
       status,
+      createdByUserId: null,
+      revokedAt: status === IntegrationClientStatus.REVOKED ? NOW : null,
+      revokedByUserId: null,
       createdAt: NOW,
       updatedAt: NOW,
     }),

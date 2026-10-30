@@ -83,7 +83,9 @@ export async function systemRoleId(
 
 /**
  * Membership com `roleId` ou com o papel de sistema da própria organização
- * (MEMBER por padrão).
+ * (MEMBER por padrão). O `createdAt` padrão vem do relógio do Node, o mesmo
+ * dos casos de uso: com o padrão do banco, um membership semeado e outro
+ * criado pela API podiam sair em ordem trocada quando os relógios divergem.
  */
 export async function seedMembership(
   prisma: PrismaClient,
@@ -102,7 +104,7 @@ export async function seedMembership(
       userId,
       roleId: roleId ?? (await systemRoleId(prisma, organizationId, role)),
       status,
-      createdAt,
+      createdAt: createdAt ?? new Date(),
     },
   });
 }

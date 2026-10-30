@@ -9,8 +9,11 @@ import {
   ensureCanAssignRole,
   ensureCanChangePermissions,
   ensureCanCreateRole,
+  ensureCanGrantScopes,
   ensureCanInviteWithRole,
+  PERMISSIONS_REQUIRED_BY_SCOPE,
 } from '@/modules/organizations/policies/privilege-escalation';
+import { MachineScope } from '@/shared/domain/machine-scope';
 
 const NOW = new Date('2026-03-01T12:00:00.000Z');
 const ALL = Object.values(OrganizationPermission);
@@ -19,6 +22,7 @@ const {
   MEMBERS_READ,
   MEMBERS_INVITE,
   MEMBERS_REMOVE,
+  ROLES_READ,
   ROLES_MANAGE,
   ROLES_ASSIGN,
 } = OrganizationPermission;
@@ -229,5 +233,52 @@ describe('Anti-escalada de privilégio', () => {
         organizationId: 'org-1',
       });
     }
+  });
+
+  describe('createIntegrationClient: escopos que quem age pode conceder', () => {
+    const reader = custom('Leitor', [MEMBERS_READ]);
+    const auditor = custom('Auditor', [MEMBERS_READ, ROLES_READ]);
+    const rolesOnly = custom('Só papéis', [ROLES_READ]);
+    const { MEMBERS_READ: READ_SCOPE, AUTHORIZE } = MachineScope;
+
+    it('members.read exige members:read; authorize exige members:read e roles:read', () => {
+      expect(PERMISSIONS_REQUIRED_BY_SCOPE).toEqual({
+        [READ_SCOPE]: [MEMBERS_READ],
+        [AUTHORIZE]: [MEMBERS_READ, ROLES_READ],
+      });
+    });
+
+    it('com members:read: concede members.read, mas não authorize', () => {
+      allowed(() => ensureCanGrantScopes(reader, [READ_SCOPE]));
+      denied(() => ensureCanGrantScopes(reader, [AUTHORIZE]));
+      denied(() => ensureCanGrantScopes(reader, [READ_SCOPE, AUTHORIZE]));
+    });
+
+    it('com members:read e roles:read: concede os dois', () => {
+      allowed(() => ensureCanGrantScopes(auditor, [READ_SCOPE, AUTHORIZE]));
+    });
+
+    it('só roles:read não basta para nenhum', () => {
+      denied(() => ensureCanGrantScopes(rolesOnly, [READ_SCOPE]));
+      denied(() => ensureCanGrantScopes(rolesOnly, [AUTHORIZE]));
+    });
+
+    it('OWNER concede todos; papel vazio, nenhum', () => {
+      allowed(() => ensureCanGrantScopes(owner, Object.values(MachineScope)));
+      denied(() => ensureCanGrantScopes(empty, [READ_SCOPE]));
+    });
+
+    it('a negação leva a organização, como as outras escaladas', () => {
+      let error: unknown;
+      try {
+        ensureCanGrantScopes(reader, [AUTHORIZE]);
+      } catch (e) {
+        error = e;
+      }
+      expect((error as PrivilegeEscalationError).securityDenial).toEqual({
+        event: 'access.privilege_escalation',
+        organizationId: 'org-1',
+      });
+    });
   });
 });

@@ -7,7 +7,9 @@ import {
   PERMISSION_CATALOG,
   isOrganizationPermission,
   parsePermissions,
+  RESERVED_PERMISSION_RESOURCES,
 } from '@/modules/organizations/policies/organization-permission';
+import { Role } from '@/modules/organizations/domain/entities/role.entity';
 
 const { MEMBERS_READ, MEMBERS_INVITE, ROLES_READ, ROLES_ASSIGN } =
   OrganizationPermission;
@@ -25,6 +27,34 @@ describe('Catálogo de permissões', () => {
     );
     for (const { description } of PERMISSION_CATALOG) {
       expect(description.trim()).not.toBe('');
+    }
+  });
+
+  it('tem as permissões de integração, com descrição; o recurso integrations fica reservado', () => {
+    expect(
+      PERMISSION_CATALOG.filter(({ key }) => key.startsWith('integrations:')),
+    ).toEqual([
+      {
+        key: 'integrations:read',
+        description: 'Ver as integrações e os escopos de cada uma',
+      },
+      {
+        key: 'integrations:manage',
+        description: 'Criar e revogar integrações',
+      },
+    ]);
+    expect(RESERVED_PERMISSION_RESOURCES).toContain('integrations');
+  });
+
+  it('o OWNER tem as de integração implicitamente; o MEMBER não ganha nenhuma', () => {
+    const { owner, member } = Role.createDefaults('org-1', new Date());
+
+    for (const key of [
+      OrganizationPermission.INTEGRATIONS_READ,
+      OrganizationPermission.INTEGRATIONS_MANAGE,
+    ]) {
+      expect(owner.grants(key)).toBe(true);
+      expect(member.grants(key)).toBe(false);
     }
   });
 

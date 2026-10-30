@@ -98,6 +98,7 @@ describe('Recursos reservados', () => {
     expect([...RESERVED_PERMISSION_RESOURCES].sort()).toEqual(
       [
         'audit',
+        'integrations',
         'invitations',
         'members',
         'organizations',

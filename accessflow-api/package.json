@@ -18,6 +18,7 @@
     "start:debug": "nest start --debug --watch",
     "start:prod": "node dist/main",
     "purge:events": "node dist/purge-events",
+    "reconcile:integrations": "node dist/reconcile-integrations",
     "lint": "eslint \"{src,apps,libs,test}/**/*.ts\" --fix",
     "typecheck": "tsc --noEmit"
   },

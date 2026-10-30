@@ -10,7 +10,7 @@ import {
 import { Logger, type INestApplication } from '@nestjs/common';
 import request from 'supertest';
 import { PrismaService } from '@/shared/infrastructure/database/prisma.service';
-import { MachineScope } from '@/modules/identity/presentation/auth/machine-scope';
+import { MachineScope } from '@/shared/domain/machine-scope';
 import { FakeTokenVerifier } from '@test/fakes/identity/fake-token-verifier';
 import { FakeMachineTokenVerifier } from '@test/fakes/identity/fake-machine-token-verifier';
 import { createTestApp } from '@test/e2e/setup/create-test-e2e-app';
@@ -130,7 +130,12 @@ describe('POST /v1/authorize (e2e)', () => {
     });
 
     await prisma.integrationClient.create({
-      data: { clientId: 'client-acme', organizationId: acmeId, name: 'ERP' },
+      data: {
+        clientId: 'client-acme',
+        organizationId: acmeId,
+        name: 'ERP',
+        scopes: Object.values(MachineScope),
+      },
     });
     machines.register('token-acme', {
       clientId: 'client-acme',

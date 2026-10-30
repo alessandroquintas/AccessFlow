@@ -91,7 +91,9 @@ describe('Desligamento gracioso (processo de verdade)', () => {
       const before = await fetch(app.url('/health/ready'));
       expect(before.status).toBe(200);
 
-      const signaledAt = Date.now();
+      // Relógio monotônico: o de parede pode andar para trás (o WSL2
+      // ressincroniza o relógio do sistema).
+      const signaledAt = performance.now();
       app.child.kill('SIGTERM');
       // Dentro da drenagem: o servidor ainda aceita conexões novas.
       await new Promise((resolve) => setTimeout(resolve, 300));
@@ -109,7 +111,7 @@ describe('Desligamento gracioso (processo de verdade)', () => {
 
       const [code, signal] = await app.exited;
       expect(signal ?? code).toBe('SIGTERM');
-      expect(Date.now() - signaledAt).toBeGreaterThanOrEqual(2000);
+      expect(performance.now() - signaledAt).toBeGreaterThanOrEqual(2000);
       expect(app.lines.at(-1)).toBe('prisma:disconnect');
       // Depois de fechar, ninguém mais atende.
       await expect(fetch(app.url('/health'))).rejects.toThrow();

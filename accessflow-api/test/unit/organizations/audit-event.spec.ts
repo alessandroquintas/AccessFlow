@@ -27,7 +27,7 @@ function roleCreated(permissions: string[], name = 'Financeiro') {
 }
 
 describe('Catálogo de ações', () => {
-  it('tem exatamente as 16 ações da tabela, com o tipo de alvo de cada uma', () => {
+  it('tem exatamente as 18 ações da tabela, com o tipo de alvo de cada uma', () => {
     expect(TARGET_TYPE_BY_ACTION).toEqual({
       'organization.created': 'organization',
       'organization.updated': 'organization',
@@ -45,9 +45,18 @@ describe('Catálogo de ações', () => {
       'permission.created': 'permission',
       'permission.updated': 'permission',
       'permission.deleted': 'permission',
+      'integration.created': 'integration',
+      'integration.revoked': 'integration',
     });
     expect(Object.values(AuditTargetType).sort()).toEqual(
-      ['invitation', 'member', 'organization', 'permission', 'role'].sort(),
+      [
+        'integration',
+        'invitation',
+        'member',
+        'organization',
+        'permission',
+        'role',
+      ].sort(),
     );
   });
 

@@ -2,7 +2,7 @@ import { afterAll, beforeAll, beforeEach, describe, expect, it } from 'vitest';
 import type { INestApplication } from '@nestjs/common';
 import request from 'supertest';
 import { PrismaService } from '@/shared/infrastructure/database/prisma.service';
-import { MachineScope } from '@/modules/identity/presentation/auth/machine-scope';
+import { MachineScope } from '@/shared/domain/machine-scope';
 import { FakeTokenVerifier } from '@test/fakes/identity/fake-token-verifier';
 import { FakeIdentityProfileProvider } from '@test/fakes/identity/fake-identity-profile-provider';
 import { FakeMachineTokenVerifier } from '@test/fakes/identity/fake-machine-token-verifier';
@@ -147,7 +147,12 @@ describe('authorizationDecisions (e2e)', () => {
       ['client-beta', betaId],
     ]) {
       await prisma.integrationClient.create({
-        data: { clientId, organizationId, name: clientId },
+        data: {
+          clientId,
+          organizationId,
+          name: clientId,
+          scopes: Object.values(MachineScope),
+        },
       });
       machines.register(`token-${clientId}`, {
         clientId,

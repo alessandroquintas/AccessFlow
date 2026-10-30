@@ -11,7 +11,7 @@ import {
 import { Logger, type INestApplication } from '@nestjs/common';
 import request from 'supertest';
 import { PrismaService } from '@/shared/infrastructure/database/prisma.service';
-import { MachineScope } from '@/modules/identity/presentation/auth/machine-scope';
+import { MachineScope } from '@/shared/domain/machine-scope';
 import { FakeTokenVerifier } from '@test/fakes/identity/fake-token-verifier';
 import { FakeIdentityProfileProvider } from '@test/fakes/identity/fake-identity-profile-provider';
 import { FakeMachineTokenVerifier } from '@test/fakes/identity/fake-machine-token-verifier';
@@ -155,7 +155,14 @@ async function addClient(
 ) {
   if (organizationId) {
     await prisma.integrationClient.create({
-      data: { clientId, organizationId, name: clientId, status },
+      data: {
+        clientId,
+        organizationId,
+        name: clientId,
+        scopes: Object.values(MachineScope),
+        status,
+        revokedAt: status === 'REVOKED' ? new Date() : null,
+      },
     });
   }
   machines.register(`token-${clientId}`, { clientId, scopes });

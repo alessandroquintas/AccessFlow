@@ -4,7 +4,7 @@ import { Reflector } from '@nestjs/core';
 import { ExecutionContextHost } from '@nestjs/core/helpers/execution-context-host';
 import { MachineAuthGuard } from '@/modules/identity/presentation/auth/guards/machine-auth.guard';
 import { RequireScopes } from '@/modules/identity/presentation/auth/decorators/require-scopes.decorator';
-import { MachineScope } from '@/modules/identity/presentation/auth/machine-scope';
+import { MachineScope } from '@/shared/domain/machine-scope';
 import type { AuthenticatedRequest } from '@/modules/identity/presentation/auth/authenticated-request';
 import { InvalidAccessTokenError } from '@/modules/identity/application/errors/invalid-access-token.error';
 import { InsufficientScopeError } from '@/modules/identity/application/errors/insufficient-scope.error';

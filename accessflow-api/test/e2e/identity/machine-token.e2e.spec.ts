@@ -12,7 +12,7 @@ import { exportJWK, generateKeyPair, SignJWT } from 'jose';
 import request from 'supertest';
 import { PrismaService } from '@/shared/infrastructure/database/prisma.service';
 import { CognitoMachineTokenVerifier } from '@/modules/identity/infrastructure/cognito/cognito-machine-token.verifier';
-import { MachineScope } from '@/modules/identity/presentation/auth/machine-scope';
+import { MachineScope } from '@/shared/domain/machine-scope';
 import { FakeTokenVerifier } from '@test/fakes/identity/fake-token-verifier';
 import { FakeIdentityProfileProvider } from '@test/fakes/identity/fake-identity-profile-provider';
 import { createTestApp } from '@test/e2e/setup/create-test-e2e-app';
@@ -95,7 +95,12 @@ describe('Token de máquina sem lista fixa de clients (e2e, verificador real)', 
     ).id;
     orgId = (await seedOrganization(prisma, { slug: 'acme', owner: anaId })).id;
     await prisma.integrationClient.create({
-      data: { clientId: NEW_CLIENT, organizationId: orgId, name: 'ERP novo' },
+      data: {
+        clientId: NEW_CLIENT,
+        organizationId: orgId,
+        name: 'ERP novo',
+        scopes: Object.values(MachineScope),
+      },
     });
   });
 
