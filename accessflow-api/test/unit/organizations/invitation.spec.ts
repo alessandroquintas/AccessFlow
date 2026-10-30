@@ -4,7 +4,6 @@ import {
   InvitationStatus,
 } from '@/modules/organizations/domain/entities/invitation.entity';
 import { InvitationNotFoundError } from '@/modules/organizations/domain/errors/invitation-not-found.error';
-import { InvalidInvitationError } from '@/modules/organizations/domain/errors/invalid-invitation.error';
 import { InvalidEmailError } from '@/shared/domain/errors/invalid-email.error';
 
 const DAY = 24 * 60 * 60 * 1000;
@@ -43,20 +42,22 @@ describe('Invitation', () => {
     (field) => {
       const invitation = makeInvitation();
 
-      expect(() =>
-        Invitation.restore({
-          id: invitation.id,
-          organizationId: invitation.organizationId,
-          email: invitation.email,
-          roleId: invitation.roleId,
-          status: invitation.status,
-          invitedByUserId: invitation.invitedByUserId,
-          expiresAt: invitation.expiresAt,
-          createdAt: invitation.createdAt,
-          updatedAt: invitation.updatedAt,
-          [field]: ' ',
-        }),
-      ).toThrow(InvalidInvitationError);
+      expect(
+        () =>
+          Invitation.restore({
+            id: invitation.id,
+            organizationId: invitation.organizationId,
+            email: invitation.email,
+            roleId: invitation.roleId,
+            status: invitation.status,
+            invitedByUserId: invitation.invitedByUserId,
+            expiresAt: invitation.expiresAt,
+            createdAt: invitation.createdAt,
+            updatedAt: invitation.updatedAt,
+            [field]: ' ',
+          }),
+        // Dado corrompido no banco: Error comum (500), não DomainError (400).
+      ).toThrow(/^Invitation inválido vindo do banco: INVALID_INVITATION: /);
     },
   );
 

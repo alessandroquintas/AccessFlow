@@ -7,6 +7,8 @@ import {
 export class FakeTokenVerifier extends TokenVerifierPort {
   private readonly identities = new Map<string, AuthenticatedIdentity>();
   private unexpectedError: Error | null = null;
+  /** Chamadas a `verify` desde o último `reset`. */
+  calls = 0;
 
   register(token: string, identity: { sub: string; clientId?: string }): void {
     this.identities.set(token, { clientId: 'test-client', ...identity });
@@ -19,9 +21,11 @@ export class FakeTokenVerifier extends TokenVerifierPort {
   reset(): void {
     this.identities.clear();
     this.unexpectedError = null;
+    this.calls = 0;
   }
 
   async verify(token: string): Promise<AuthenticatedIdentity> {
+    this.calls++;
     if (this.unexpectedError) {
       throw this.unexpectedError;
     }

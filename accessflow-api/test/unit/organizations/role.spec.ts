@@ -402,20 +402,22 @@ describe('Role', () => {
   it.each(['id', 'organizationId', 'name'] as const)(
     'restore exige %s',
     (field) => {
-      expect(() =>
-        Role.restore({
-          id: member.id,
-          organizationId: member.organizationId,
-          name: member.name,
-          description: member.description,
-          systemKey: member.systemKey,
-          permissions: member.permissions,
-          deletedAt: member.deletedAt,
-          createdAt: member.createdAt,
-          updatedAt: member.updatedAt,
-          [field]: ' ',
-        }),
-      ).toThrow(InvalidRoleError);
+      expect(
+        () =>
+          Role.restore({
+            id: member.id,
+            organizationId: member.organizationId,
+            name: member.name,
+            description: member.description,
+            systemKey: member.systemKey,
+            permissions: member.permissions,
+            deletedAt: member.deletedAt,
+            createdAt: member.createdAt,
+            updatedAt: member.updatedAt,
+            [field]: ' ',
+          }),
+        // Dado corrompido no banco: Error comum (500), não DomainError (400).
+      ).toThrow(/^Role inválido vindo do banco: INVALID_ROLE: /);
     },
   );
 });

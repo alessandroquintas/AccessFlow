@@ -46,14 +46,16 @@ describe('Corpo JSON inválido (e2e)', () => {
     expect(res.body).toEqual(INVALID_JSON);
   });
 
-  it('as demais exceções do Nest seguem como estavam (ex.: rota inexistente)', async () => {
+  it('rota inexistente também no formato padrão (ROUTE_NOT_FOUND), sem repetir o caminho', async () => {
     const res = await request(app.getHttpServer()).get('/v1/nao-existe');
 
     expect(res.status).toBe(404);
     expect(res.body).toEqual({
-      message: 'Cannot GET /v1/nao-existe',
-      error: 'Not Found',
-      statusCode: 404,
+      error: {
+        code: 'NOT_FOUND',
+        reason: 'ROUTE_NOT_FOUND',
+        message: 'Rota não encontrada.',
+      },
     });
   });
 });

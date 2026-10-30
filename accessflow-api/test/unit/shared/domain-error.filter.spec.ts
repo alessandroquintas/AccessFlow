@@ -1,6 +1,7 @@
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 import {
   BadRequestException,
+  HttpException,
   HttpServer,
   Logger,
   NotFoundException,
@@ -225,22 +226,30 @@ describe('DomainErrorFilter', () => {
             },
           }),
         ],
-      ])('%s: segue o padrão do Nest', (_, request) => {
-        sut.catch(
-          new BadRequestException('Failed to decode param'),
-          hostWith(request),
-        );
+      ])(
+        '%s: é a URI malformada (o URIError do roteador), no formato padrão',
+        (_, request) => {
+          sut.catch(
+            new BadRequestException("Failed to decode param '%E0%A4%A'"),
+            hostWith(request),
+          );
 
-        expect(adapter.reply).toHaveBeenCalledWith(
-          response,
-          {
-            message: 'Failed to decode param',
-            error: 'Bad Request',
-            statusCode: 400,
-          },
-          400,
-        );
-      });
+          expect(adapter.reply).toHaveBeenCalledWith(
+            response,
+            {
+              error: {
+                code: 'BAD_REQUEST',
+                reason: 'MALFORMED_URI',
+                message: 'O endereço da requisição está malformado.',
+              },
+            },
+            400,
+          );
+          expect(JSON.stringify(adapter.reply.mock.calls)).not.toContain(
+            'decode',
+          );
+        },
+      );
     });
 
     it('responde DomainError com status e corpo padronizado', () => {
@@ -381,13 +390,62 @@ describe('DomainErrorFilter', () => {
       });
     });
 
-    it('mantém o comportamento padrão do Nest para HttpException', () => {
-      sut.catch(new NotFoundException('Cannot GET /x'), httpHost());
+    describe('erros de transporte no formato padrão, sem a mensagem de origem', () => {
+      it.each([
+        [
+          '404 do Nest (rota inexistente)',
+          new NotFoundException('Cannot GET /segredo'),
+          404,
+          {
+            code: 'NOT_FOUND',
+            reason: 'ROUTE_NOT_FOUND',
+            message: 'Rota não encontrada.',
+          },
+        ],
+        [
+          '413 do body-parser',
+          Object.assign(new Error('request entity too large'), {
+            status: 413,
+            type: 'entity.too.large',
+          }),
+          413,
+          {
+            code: 'PAYLOAD_TOO_LARGE',
+            reason: 'PAYLOAD_TOO_LARGE',
+            message: 'O corpo da requisição excede o tamanho permitido.',
+          },
+        ],
+        [
+          '415 do body-parser',
+          Object.assign(new Error('unsupported content encoding "xyz"'), {
+            status: 415,
+            type: 'encoding.unsupported',
+          }),
+          415,
+          {
+            code: 'UNSUPPORTED_MEDIA_TYPE',
+            reason: 'UNSUPPORTED_MEDIA_TYPE',
+            message:
+              'A codificação ou o charset do corpo da requisição não é suportado.',
+          },
+        ],
+      ])('%s', (_, exception, status, error) => {
+        sut.catch(exception, httpHost());
+
+        expect(adapter.reply).toHaveBeenCalledWith(response, { error }, status);
+        expect(JSON.stringify(adapter.reply.mock.calls)).not.toMatch(
+          /segredo|entity|xyz/,
+        );
+      });
+    });
+
+    it('as demais HttpException seguem o padrão do Nest', () => {
+      sut.catch(new HttpException('Calma', 429), httpHost());
 
       expect(adapter.reply).toHaveBeenCalledWith(
         response,
-        { statusCode: 404, message: 'Cannot GET /x', error: 'Not Found' },
-        404,
+        { statusCode: 429, message: 'Calma' },
+        429,
       );
     });
   });

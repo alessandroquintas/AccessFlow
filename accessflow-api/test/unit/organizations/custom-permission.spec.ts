@@ -6,7 +6,6 @@ import { PermissionDescription } from '@/modules/organizations/domain/value-obje
 import { InvalidPermissionKeyError } from '@/modules/organizations/domain/errors/invalid-permission-key.error';
 import { InvalidPermissionDescriptionError } from '@/modules/organizations/domain/errors/invalid-permission-description.error';
 import { ReservedPermissionResourceError } from '@/modules/organizations/domain/errors/reserved-permission-resource.error';
-import { InvalidCustomPermissionError } from '@/modules/organizations/domain/errors/invalid-custom-permission.error';
 import { InvalidPermissionError } from '@/modules/organizations/domain/errors/invalid-permission.error';
 import { PrivilegeEscalationError } from '@/modules/organizations/domain/errors/privilege-escalation.error';
 import {
@@ -178,17 +177,21 @@ describe('CustomPermission', () => {
   });
 
   it.each(['id', 'organizationId'] as const)('restore exige %s', (field) => {
-    expect(() =>
-      CustomPermission.restore({
-        id: 'perm-1',
-        organizationId: 'org-1',
-        key: 'invoices:approve',
-        description: 'Aprovar',
-        createdAt: NOW,
-        updatedAt: NOW,
-        [field]: ' ',
-      }),
-    ).toThrow(InvalidCustomPermissionError);
+    expect(
+      () =>
+        CustomPermission.restore({
+          id: 'perm-1',
+          organizationId: 'org-1',
+          key: 'invoices:approve',
+          description: 'Aprovar',
+          createdAt: NOW,
+          updatedAt: NOW,
+          [field]: ' ',
+        }),
+      // Dado corrompido no banco: Error comum (500), não DomainError (400).
+    ).toThrow(
+      /^CustomPermission inválido vindo do banco: INVALID_CUSTOM_PERMISSION: /,
+    );
   });
 });
 
