@@ -1,31 +1,26 @@
 "use client";
 
-import { useSnackbar, type VariantType } from "notistack";
 import { useCallback, useMemo } from "react";
+import { toast } from "sonner";
+
+type AlertVariant = "default" | "success" | "error" | "info" | "warning";
 
 interface AlertArgs {
-  variant: VariantType;
+  variant: AlertVariant;
   message: string;
+  description?: string;
   hideDuration?: number;
-  anchorOrigin?: {
-    horizontal: "right" | "left" | "center";
-    vertical: "top" | "bottom";
-  };
 }
 
 export const useAlert = () => {
-  const { enqueueSnackbar } = useSnackbar();
-
   const Alert = useCallback(
-    ({ variant, message, hideDuration, anchorOrigin }: AlertArgs) => {
-      enqueueSnackbar(message, {
-        anchorOrigin: anchorOrigin ?? { horizontal: "right", vertical: "bottom" },
-        variant,
-        autoHideDuration: hideDuration ?? 3000,
-        preventDuplicate: true,
-      });
+    ({ variant, message, description, hideDuration }: AlertArgs) => {
+      const show = variant === "default" ? toast : toast[variant];
+
+      // O id pela mensagem evita o mesmo toast empilhado (cliques repetidos).
+      show(message, { id: message, description, duration: hideDuration ?? 4000 });
     },
-    [enqueueSnackbar],
+    [],
   );
 
   return useMemo(() => ({ Alert }), [Alert]);

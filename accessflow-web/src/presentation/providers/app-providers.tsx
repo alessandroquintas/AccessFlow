@@ -1,12 +1,19 @@
 "use client";
 
-import { AlertProvider } from "./alert-provider";
+import { Toaster } from "@/shared/components/ui/sonner";
+import { TooltipProvider } from "@/shared/components/ui/tooltip";
 import { QueryProvider } from "./query-provider";
+import { ThemeProvider } from "./theme-provider";
 
 export function AppProviders({ children }: { children: React.ReactNode }) {
   return (
-    <QueryProvider>
-      <AlertProvider>{children}</AlertProvider>
-    </QueryProvider>
+    <ThemeProvider>
+      <QueryProvider>
+        <TooltipProvider>
+          {children}
+          <Toaster position="bottom-right" closeButton />
+        </TooltipProvider>
+      </QueryProvider>
+    </ThemeProvider>
   );
 }
