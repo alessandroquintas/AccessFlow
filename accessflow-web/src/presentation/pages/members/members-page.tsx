@@ -1,15 +1,15 @@
 "use client";
 
-import Link from "next/link";
 import { useSearchParams } from "next/navigation";
 import { Can } from "@/modules/access-control/containers/can";
+import { PermissionCheck } from "@/modules/access-control/containers/permission-check";
 import { RequirePermission } from "@/modules/access-control/containers/require-permission";
 import { InviteMemberDialog } from "@/modules/invitations/containers/invite-member-dialog";
 import { OrganizationInvitations } from "@/modules/invitations/containers/organization-invitations";
 import { MembersList } from "@/modules/members/containers/members-list";
 import { CurrentOrganization } from "@/modules/organizations/containers/current-organization";
 import { PageBody, PageHeader } from "@/shared/components/layout/page-header";
-import { cn } from "@/shared/lib/utils";
+import { RouteTabs } from "@/shared/components/layout/route-tabs";
 
 type MembersTab = "members" | "invitations";
 
@@ -18,32 +18,17 @@ const TABS: { value: MembersTab; label: string; href: string; permissions: strin
   { value: "invitations", label: "Convites", href: "/members/invitations", permissions: ["members:invite"] },
 ];
 
-/**
- * Abas de navegação: cada uma é uma rota (dá para abrir e compartilhar o
- * endereço), então são links com aria-current, não o componente Tabs.
- */
 function MembersTabs({ organizationId, current }: { organizationId: string; current: MembersTab }) {
   return (
-    <nav aria-label="Membros e convites" className="border-b">
-      <ul className="-mb-px flex gap-4">
-        {TABS.map((tab) => (
-          <Can key={tab.value} organizationId={organizationId} permissions={tab.permissions}>
-            <li>
-              <Link
-                href={tab.href}
-                aria-current={tab.value === current ? "page" : undefined}
-                className={cn(
-                  "inline-flex h-9 items-center border-b-2 border-transparent px-1 text-sm font-medium text-muted-foreground transition-colors outline-none hover:text-foreground focus-visible:rounded-sm focus-visible:ring-2 focus-visible:ring-ring",
-                  tab.value === current && "border-primary text-foreground",
-                )}
-              >
-                {tab.label}
-              </Link>
-            </li>
-          </Can>
-        ))}
-      </ul>
-    </nav>
+    <PermissionCheck organizationId={organizationId}>
+      {(can) => (
+        <RouteTabs
+          label="Membros e convites"
+          current={current}
+          tabs={TABS.filter((tab) => tab.permissions.every((key) => can(key)))}
+        />
+      )}
+    </PermissionCheck>
   );
 }
 

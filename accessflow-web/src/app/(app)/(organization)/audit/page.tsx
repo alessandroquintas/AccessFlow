@@ -1,8 +1,8 @@
 import type { Metadata } from "next";
-import { OrganizationPlaceholderPage } from "@/presentation/pages/organization/organization-placeholder-page";
+import { AuditPage } from "@/presentation/pages/audit/audit-page";
 
 export const metadata: Metadata = { title: "Auditoria" };
 
 export default function Page() {
-  return <OrganizationPlaceholderPage title="Auditoria" permissions={["audit:read"]} part={5} />;
+  return <AuditPage tab="activity" />;
 }
