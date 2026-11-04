@@ -10,7 +10,16 @@ export const API_ERROR_MESSAGES = {
   LAST_OWNER: "A organização precisa ter pelo menos um OWNER. Torne outro membro OWNER antes.",
   MEMBER_NOT_FOUND: "Esta pessoa não é mais membro da organização. Atualize a lista.",
   ORGANIZATION_PERMISSION_DENIED: "Você não tem mais permissão para esta ação. Atualize a página para ver o que mudou.",
-  PRIVILEGE_ESCALATION: "Você só pode conceder ou tirar papéis cujas permissões você tem.",
+  PRIVILEGE_ESCALATION: "Você só pode conceder ou tirar papéis e permissões que você mesmo tem.",
+  ROLE_NAME_TAKEN: "Já existe um papel com esse nome. Escolha outro nome.",
+  ROLE_LIMIT_REACHED: "A organização atingiu o limite de papéis personalizados. Exclua um papel sem uso antes de criar outro.",
+  SYSTEM_ROLE_IMMUTABLE: "Papéis de sistema não mudam de nome e o OWNER não muda de permissões.",
+  ROLE_IN_USE: "Este papel ainda tem membros ou convites pendentes. Troque o papel deles antes de excluir.",
+  INVALID_PERMISSION_KEY: "A chave não está no formato recurso:ação, com letras minúsculas, dígitos e hífen.",
+  RESERVED_PERMISSION_RESOURCE: "O recurso da chave é do sistema. Escolha outro nome para o recurso.",
+  PERMISSION_KEY_TAKEN: "Já existe uma permissão com essa chave. Escolha outra chave.",
+  PERMISSION_LIMIT_REACHED: "A organização atingiu o limite de permissões personalizadas. Exclua uma sem uso antes de criar outra.",
+  PERMISSION_IN_USE: "Esta permissão ainda é concedida por algum papel. Tire-a dos papéis antes de excluir.",
 } as const;
 
 export type ApiErrorCode = keyof typeof API_ERROR_MESSAGES;

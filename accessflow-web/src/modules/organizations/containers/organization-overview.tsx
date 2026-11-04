@@ -167,9 +167,9 @@ export function OrganizationOverview({ organization }: { organization: Organizat
                                   variant="outline"
                                 />
                               )}
-                              {/* Fase 11a, Partes 4 e 5: os diálogos de criar abrem nas próprias telas. */}
+                              {/* Fase 11a, Parte 5: o diálogo de criar integração abre na própria tela. */}
                               {can("roles:manage") && (
-                                <Button variant="outline" render={<Link href="/roles" />} nativeButton={false}>
+                                <Button variant="outline" render={<Link href="/roles/new" />} nativeButton={false}>
                                   <PlusIcon data-icon="inline-start" />
                                   Criar papel
                                 </Button>

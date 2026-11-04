@@ -1,6 +1,7 @@
 "use client";
 
 import Link from "next/link";
+import { useSearchParams } from "next/navigation";
 import { Can } from "@/modules/access-control/containers/can";
 import { RequirePermission } from "@/modules/access-control/containers/require-permission";
 import { InviteMemberDialog } from "@/modules/invitations/containers/invite-member-dialog";
@@ -47,6 +48,9 @@ function MembersTabs({ organizationId, current }: { organizationId: string; curr
 }
 
 export function MembersPage({ tab }: { tab: MembersTab }) {
+  // /members?role=<id>: o link "membros com o papel" de Papéis.
+  const roleId = useSearchParams().get("role");
+
   return (
     <CurrentOrganization>
       {(organization) => {
@@ -80,6 +84,7 @@ export function MembersPage({ tab }: { tab: MembersTab }) {
                     organizationName={organization.name}
                     viewerIsOwner={viewerIsOwner}
                     inviteAction={invite({})}
+                    initialRoleId={roleId}
                   />
                 ) : (
                   <OrganizationInvitations organizationId={organization.id} viewerIsOwner={viewerIsOwner} />

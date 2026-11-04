@@ -26,7 +26,7 @@ export const ORGANIZATION_NAV: OrganizationNavItem[] = [
   { title: "Visão geral", href: "/overview", icon: LayoutDashboardIcon, permissions: [] },
   { title: "Membros", href: "/members", icon: UsersIcon, permissions: ["members:read"] },
   { title: "Papéis", href: "/roles", icon: ShieldCheckIcon, permissions: ["roles:read"] },
-  { title: "Permissões", href: "/permissions", icon: KeyRoundIcon, permissions: ["permissions:manage"] },
+  { title: "Permissões", href: "/permissions", icon: KeyRoundIcon, permissions: ["roles:read"] },
   { title: "Integrações", href: "/integrations", icon: CableIcon, permissions: ["integrations:read"] },
   { title: "Auditoria", href: "/audit", icon: ScrollTextIcon, permissions: ["audit:read"] },
   { title: "Configurações", href: "/settings", icon: SettingsIcon, permissions: ["organizations:update"] },

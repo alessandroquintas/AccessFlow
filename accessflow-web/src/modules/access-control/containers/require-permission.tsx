@@ -8,6 +8,8 @@ import type { PermissionKey } from "../schemas";
 interface RequirePermissionProps {
   organizationId: string | undefined;
   permissions: readonly PermissionKey[];
+  /** Onde o estado "sem permissão" entra, quando a página monta o próprio cabeçalho. */
+  fallback?: (state: React.ReactNode) => React.ReactNode;
   children: React.ReactNode;
 }
 
@@ -16,8 +18,9 @@ interface RequirePermissionProps {
  * permissão", nunca uma tela quebrada. O cenário "Sem permissão" do seletor
  * força esse estado.
  */
-export function RequirePermission({ organizationId, permissions, children }: RequirePermissionProps) {
+export function RequirePermission({ organizationId, permissions, fallback, children }: RequirePermissionProps) {
   const { canAll } = usePermissions(organizationId);
   const scenario = useScenario();
-  return canAll(permissions) && scenario !== "forbidden" ? children : <NoPermissionState />;
+  if (canAll(permissions) && scenario !== "forbidden") return children;
+  return fallback ? fallback(<NoPermissionState />) : <NoPermissionState />;
 }

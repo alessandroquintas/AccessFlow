@@ -34,7 +34,7 @@ interface InviteMemberDialogProps {
   /** Com open/onOpenChange, o diálogo é controlado de fora e não tem botão próprio. */
   open?: boolean;
   onOpenChange?: (open: boolean) => void;
-  /** Reenviar um convite: começa com o e-mail e o papel dele. */
+  /** Renovar um convite: começa com o e-mail e o papel dele. */
   defaultValues?: InviteMemberValues;
   /** No cabeçalho, em telas estreitas, o botão fica só com o ícone. */
   compact?: boolean;
@@ -45,9 +45,12 @@ function InviteMemberFormBody({
   organizationId,
   viewerIsOwner,
   defaultValues,
+  renewing,
   onDone,
 }: Pick<InviteMemberDialogProps, "organizationId" | "viewerIsOwner"> & {
   defaultValues: InviteMemberValues;
+  /** Aberto por "Renovar convite": o aviso de renovação seria redundante. */
+  renewing: boolean;
   onDone: () => void;
 }) {
   const { findRenewable, markInvited } = useOrganizationInvitations(organizationId);
@@ -76,13 +79,13 @@ function InviteMemberFormBody({
               return;
             }
             const normalized = email.trim().toLowerCase();
-            const renewing = findRenewable(normalized) !== undefined;
+            const renewed = findRenewable(normalized) !== undefined;
             markInvited({
               email: normalized,
               assignedRole: { id: role.id, name: role.name, kind: role.kind },
               invitedByName: "Você",
             });
-            toast.success(renewing ? "Convite renovado" : "Convite enviado", {
+            toast.success(renewed ? "Convite renovado" : "Convite enviado", {
               description: `${normalized} tem 7 dias para aceitar.`,
             });
             onDone();
@@ -138,7 +141,7 @@ function InviteMemberFormBody({
               )}
             />
           </FieldGroup>
-          {renewable && (
+          {renewable && !renewing && (
             <Alert>
               <InfoIcon />
               <AlertTitle>
@@ -180,9 +183,11 @@ export function InviteMemberDialog({
       )}
       <DialogContent>
         <DialogHeader>
-          <DialogTitle>{defaultValues ? "Reenviar convite" : "Convidar membro"}</DialogTitle>
+          <DialogTitle>{defaultValues ? "Renovar convite" : "Convidar membro"}</DialogTitle>
           <DialogDescription>
-            Quem recebe o convite entra com o papel escolhido e pode recusar.
+            {defaultValues
+              ? "O prazo volta a 7 dias a partir de agora. Você pode trocar o papel antes de renovar."
+              : "Quem recebe o convite entra com o papel escolhido e pode recusar."}
           </DialogDescription>
         </DialogHeader>
         {/* Montado só com o diálogo aberto: cada abertura começa limpa. */}
@@ -195,6 +200,7 @@ export function InviteMemberDialog({
                 defaultValues={
                   defaultValues ?? { email: "", roleId: roles.find(({ kind }) => kind === "MEMBER")?.id ?? "" }
                 }
+                renewing={defaultValues !== undefined}
                 onDone={() => setOpen(false)}
               />
             )}

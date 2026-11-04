@@ -13,22 +13,16 @@ import { Empty, EmptyContent, EmptyDescription, EmptyHeader, EmptyMedia, EmptyTi
 import { Select, SelectContent, SelectGroup, SelectItem, SelectTrigger, SelectValue } from "@/shared/components/ui/select";
 import { apiErrorMessage } from "@/shared/lib/api-errors";
 import { pluralize } from "@/shared/lib/format";
-import { STATUS_LABELS } from "../components/invitation-status-badge";
 import { INVITATION_COLUMNS, OrganizationInvitationList } from "../components/organization-invitation-list";
 import { RevokeInvitationDialog } from "../components/revoke-invitation-dialog";
 import { useOrganizationInvitations } from "../hooks/use-organization-invitations";
 import type { InvitationStatus, OrganizationInvitation } from "../schemas";
 import { InviteMemberDialog } from "./invite-member-dialog";
 
-type StatusFilter = InvitationStatus | "ALL";
-
-const STATUS_ITEMS: { label: string; value: StatusFilter }[] = [
+/** A API lista só pendentes e vencidos: aceitos, recusados e revogados ficam na auditoria. */
+const STATUS_ITEMS: { label: string; value: InvitationStatus }[] = [
   { label: "Pendentes", value: "PENDING" },
   { label: "Expirados", value: "EXPIRED" },
-  { label: "Aceitos", value: "ACCEPTED" },
-  { label: "Recusados", value: "DECLINED" },
-  { label: "Revogados", value: "REVOKED" },
-  { label: "Todos os status", value: "ALL" },
 ];
 
 interface OrganizationInvitationsProps {
@@ -36,13 +30,13 @@ interface OrganizationInvitationsProps {
   viewerIsOwner: boolean;
 }
 
-type DialogState = { kind: "resend" | "revoke"; invitation: OrganizationInvitation; open: boolean } | null;
+type DialogState = { kind: "renew" | "revoke"; invitation: OrganizationInvitation; open: boolean } | null;
 
 export function OrganizationInvitations({ organizationId, viewerIsOwner }: OrganizationInvitationsProps) {
   const pathname = usePathname();
   const scenario = useScenario();
   const { invitations, markRevoked } = useOrganizationInvitations(organizationId);
-  const [status, setStatus] = useState<StatusFilter>("PENDING");
+  const [status, setStatus] = useState<InvitationStatus>("PENDING");
   const [dialog, setDialog] = useState<DialogState>(null);
 
   if (scenario === "loading") {
@@ -58,7 +52,7 @@ export function OrganizationInvitations({ organizationId, viewerIsOwner }: Organ
   if (scenario === "error") return <ErrorState onRetry={() => setScenario("normal", pathname)} />;
 
   const filtered =
-    scenario === "empty" ? [] : invitations.filter((invitation) => status === "ALL" || invitation.status === status);
+    scenario === "empty" ? [] : invitations.filter((invitation) => invitation.status === status);
   const closeDialog = () => setDialog((current) => current && { ...current, open: false });
 
   return (
@@ -95,12 +89,8 @@ export function OrganizationInvitations({ organizationId, viewerIsOwner }: Organ
               </>
             ) : (
               <>
-                <EmptyTitle>Nenhum convite com este status</EmptyTitle>
-                <EmptyDescription>
-                  {status === "ALL"
-                    ? "A organização ainda não enviou convites."
-                    : `Não há convites com o status “${STATUS_LABELS[status]}”.`}
-                </EmptyDescription>
+                <EmptyTitle>Nenhum convite expirado</EmptyTitle>
+                <EmptyDescription>Convites que vencerem sem resposta aparecem aqui para você renovar.</EmptyDescription>
               </>
             )}
           </EmptyHeader>
@@ -112,7 +102,7 @@ export function OrganizationInvitations({ organizationId, viewerIsOwner }: Organ
         <>
           <OrganizationInvitationList
             invitations={filtered}
-            onResend={(invitation) => setDialog({ kind: "resend", invitation, open: true })}
+            onRenew={(invitation) => setDialog({ kind: "renew", invitation, open: true })}
             onRevoke={(invitation) => setDialog({ kind: "revoke", invitation, open: true })}
           />
           <p className="text-sm text-muted-foreground tabular-nums" aria-live="polite">
@@ -124,10 +114,10 @@ export function OrganizationInvitations({ organizationId, viewerIsOwner }: Organ
       <InviteMemberDialog
         organizationId={organizationId}
         viewerIsOwner={viewerIsOwner}
-        open={dialog?.kind === "resend" && dialog.open}
+        open={dialog?.kind === "renew" && dialog.open}
         onOpenChange={(open) => !open && closeDialog()}
         defaultValues={
-          dialog?.kind === "resend"
+          dialog?.kind === "renew"
             ? { email: dialog.invitation.email, roleId: dialog.invitation.assignedRole.id }
             : undefined
         }

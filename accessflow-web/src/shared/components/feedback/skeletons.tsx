@@ -323,3 +323,32 @@ export function CenteredCardSkeleton() {
     </div>
   );
 }
+
+/** Lista de permissões com caixas de seleção, agrupada (o editor de papel). */
+export function ChecklistSkeleton({ groups = 3, rows = 3 }: { groups?: number; rows?: number }) {
+  return (
+    <div aria-hidden="true" className="flex flex-col gap-6">
+      {range(groups).map((group) => (
+        <div key={group} className="flex flex-col gap-3">
+          <div className="flex items-center justify-between gap-2">
+            <TextBar className={cn("h-4", group % 2 ? "w-24" : "w-32")} />
+            <Skeleton className="h-6 w-28" />
+          </div>
+          {range(rows).map((row) => (
+            <div key={row} className="flex items-start gap-3">
+              <Skeleton className="mt-0.5 size-4 shrink-0 rounded-[4px]" />
+              <div className="flex min-w-0 flex-1 flex-col gap-1">
+                <span className="flex h-5 items-center">
+                  <Skeleton className={cn("h-4 rounded-sm", (row + group) % 2 ? "w-28" : "w-36")} />
+                </span>
+                <span className="flex h-4 items-center">
+                  <Skeleton className={cn("h-3", widthAt(row, group), "max-w-72")} />
+                </span>
+              </div>
+            </div>
+          ))}
+        </div>
+      ))}
+    </div>
+  );
+}

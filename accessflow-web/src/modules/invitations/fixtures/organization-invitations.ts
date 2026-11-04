@@ -7,12 +7,12 @@ const VV = {
   member: { id: "role-vv-member", name: "MEMBER", kind: "MEMBER" as const },
   audit: { id: "role-vv-audit", name: "Auditoria", kind: "CUSTOM" as const },
   finance: { id: "role-vv-finance", name: "Financeiro", kind: "CUSTOM" as const },
-  access: { id: "role-vv-access", name: "Gestor de acesso", kind: "CUSTOM" as const },
 };
 
 /**
- * Convites enviados por cada organização (por id), do mais recente para o
- * mais antigo. Os pendentes batem com o resumo da visão geral.
+ * Convites pendentes de cada organização (por id), vencidos incluídos, do
+ * mais recente para o mais antigo (como o `organizationInvitations`). Os
+ * pendentes batem com o resumo da visão geral.
  */
 export const ORGANIZATION_INVITATIONS: Record<string, OrganizationInvitation[]> = {
   "org-vale-verde": [
@@ -41,36 +41,12 @@ export const ORGANIZATION_INVITATIONS: Record<string, OrganizationInvitation[]> 
       status: "PENDING",
     },
     {
-      id: "oinv-sofia",
-      email: "sofia.campos@valeverde.coop.br",
-      assignedRole: VV.access,
-      invitedByName: "Helena Duarte",
-      expiresAt: inHours(3 * 24),
-      status: "ACCEPTED",
-    },
-    {
       id: "oinv-otavio",
       email: "otavio.reis@valeverde.coop.br",
       assignedRole: VV.member,
       invitedByName: "Camila Teixeira",
       expiresAt: inHours(-2 * 24),
       status: "EXPIRED",
-    },
-    {
-      id: "oinv-jorge",
-      email: "jorge.matos@valeverde.coop.br",
-      assignedRole: VV.member,
-      invitedByName: "Camila Teixeira",
-      expiresAt: inHours(-5 * 24),
-      status: "DECLINED",
-    },
-    {
-      id: "oinv-paula",
-      email: "paula.siqueira@valeverde.coop.br",
-      assignedRole: VV.finance,
-      invitedByName: "Helena Duarte",
-      expiresAt: inHours(-9 * 24),
-      status: "REVOKED",
     },
     {
       id: "oinv-debora",

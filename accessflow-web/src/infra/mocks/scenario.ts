@@ -40,9 +40,18 @@ export function useScenario(): ScenarioMode {
   return target === pathname ? mode : "normal";
 }
 
+const attempts = new Map<string, number>();
+
 /**
  * Ação de fachada: devolve o erro que a API mandaria, se a simulação estiver
- * ligada; senão, null (sucesso). Fase 11b: some, e o erro vem da mutation.
+ * ligada; senão, null (sucesso). Com vários códigos possíveis, cada tentativa
+ * devolve o próximo, para revisar todas as mensagens da ação. Fase 11b:
+ * some, e o erro vem da mutation.
  */
-export const mockActionError = (code: ApiErrorCode): ApiErrorCode | null =>
-  scenarioStore.get().failActions ? code : null;
+export const mockActionError = (...codes: [ApiErrorCode, ...ApiErrorCode[]]): ApiErrorCode | null => {
+  if (!scenarioStore.get().failActions) return null;
+  const id = codes.join();
+  const attempt = attempts.get(id) ?? 0;
+  attempts.set(id, attempt + 1);
+  return codes[attempt % codes.length];
+};

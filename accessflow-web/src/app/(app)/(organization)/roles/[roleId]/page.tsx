@@ -1,8 +1,8 @@
 import type { Metadata } from "next";
-import { OrganizationPlaceholderPage } from "@/presentation/pages/organization/organization-placeholder-page";
+import { RoleEditorPage } from "@/presentation/pages/roles/role-editor-page";
 
 export const metadata: Metadata = { title: "Papel" };
 
 export default function Page() {
-  return <OrganizationPlaceholderPage title="Papel" permissions={["roles:read"]} part={4} />;
+  return <RoleEditorPage mode="edit" />;
 }

@@ -14,7 +14,8 @@ export const myInvitationSchema = z.object({
   expiresAt: z.iso.datetime(),
 });
 
-export const invitationStatusSchema = z.enum(["PENDING", "ACCEPTED", "DECLINED", "REVOKED", "EXPIRED"]);
+/** A API lista só os pendentes, com os vencidos (EXPIRED) incluídos. */
+export const invitationStatusSchema = z.enum(["PENDING", "EXPIRED"]);
 
 /** Convite enviado pela organização (equivale ao `OrganizationInvitation`). */
 export const organizationInvitationSchema = z.object({

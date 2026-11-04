@@ -28,17 +28,11 @@ export function useOrganizationInvitations(organizationId: string) {
     invitations,
     /** O convite pendente (ou vencido) para o e-mail, que um novo convite renova. */
     findRenewable: (email: string) =>
-      invitations.find(
-        (invitation) =>
-          invitation.email === email.trim().toLowerCase() &&
-          (invitation.status === "PENDING" || invitation.status === "EXPIRED"),
-      ),
+      invitations.find((invitation) => invitation.email === email.trim().toLowerCase()),
     /** Cria ou renova: o renovado volta ao topo com mais 7 dias e o papel escolhido. */
     markInvited: (invitation: Omit<OrganizationInvitation, "id" | "expiresAt" | "status">) =>
       update((current) => {
-        const renewed = current.find(
-          ({ email, status }) => email === invitation.email && (status === "PENDING" || status === "EXPIRED"),
-        );
+        const renewed = current.find(({ email }) => email === invitation.email);
         const saved: OrganizationInvitation = {
           ...invitation,
           id: renewed?.id ?? `oinv-${Date.now()}`,
@@ -47,9 +41,7 @@ export function useOrganizationInvitations(organizationId: string) {
         };
         return [saved, ...current.filter(({ id }) => id !== saved.id)];
       }),
-    markRevoked: (id: string) =>
-      update((current) =>
-        current.map((invitation) => (invitation.id === id ? { ...invitation, status: "REVOKED" } : invitation)),
-      ),
+    /** Revogado sai da lista: a API só lista pendentes e vencidos. */
+    markRevoked: (id: string) => update((current) => current.filter((invitation) => invitation.id !== id)),
   };
 }

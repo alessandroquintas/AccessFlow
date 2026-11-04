@@ -1,5 +1,13 @@
 "use client"
 
+/*
+ * Alterado em relação ao gerado pelo shadcn (Fase 11a, Parte 3): no
+ * `SelectItem`, o `SelectPrimitive.ItemText` usa `min-w-0` no lugar de
+ * `shrink-0`, para um item com texto longo (o motivo de um papel bloqueado no
+ * RoleSelect) quebrar linha em vez de alargar a lista. Rodar
+ * `npx shadcn add select` sobrescreve esta mudança.
+ */
+
 import * as React from "react"
 import { Select as SelectPrimitive } from "@base-ui/react/select"
 import { cn } from "cn"

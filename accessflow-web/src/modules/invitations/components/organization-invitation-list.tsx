@@ -1,4 +1,4 @@
-import { ClockAlertIcon, MailPlusIcon, MoreHorizontalIcon, XCircleIcon } from "lucide-react";
+import { ClockAlertIcon, MoreHorizontalIcon, RefreshCwIcon, XCircleIcon } from "lucide-react";
 import { DataTable } from "@/shared/components/data-table";
 import type { TableSkeletonColumn } from "@/shared/components/feedback/skeletons";
 import { LocalDate } from "@/shared/components/local-date";
@@ -41,14 +41,6 @@ function Expiration({ invitation, labeled = false }: { invitation: OrganizationI
       </span>
     );
   }
-  if (invitation.status !== "PENDING") {
-    return (
-      <span className="text-muted-foreground">
-        <span aria-hidden="true">—</span>
-        <span className="sr-only">Não se aplica</span>
-      </span>
-    );
-  }
   const soon = now !== null && new Date(invitation.expiresAt).getTime() - now < SOON_MS;
   return soon ? (
     <span className="flex items-center gap-1.5 font-medium text-warning">
@@ -66,15 +58,15 @@ function Expiration({ invitation, labeled = false }: { invitation: OrganizationI
 }
 
 export interface InvitationActionHandlers {
-  onResend: (invitation: OrganizationInvitation) => void;
+  onRenew: (invitation: OrganizationInvitation) => void;
   onRevoke: (invitation: OrganizationInvitation) => void;
 }
 
-/** Reenviar renova o prazo (pendente ou vencido); revogar, só o pendente. */
-function InvitationActions({ invitation, onResend, onRevoke }: { invitation: OrganizationInvitation } & InvitationActionHandlers) {
-  const renewable = invitation.status === "PENDING" || invitation.status === "EXPIRED";
-  if (!renewable) return null;
-
+/**
+ * Renovar (o mesmo inviteMember) devolve 7 dias de prazo, pendente ou
+ * vencido; revogar, só o pendente. O AccessFlow não envia e-mails.
+ */
+function InvitationActions({ invitation, onRenew, onRevoke }: { invitation: OrganizationInvitation } & InvitationActionHandlers) {
   return (
     <DropdownMenu>
       <DropdownMenuTrigger
@@ -84,9 +76,9 @@ function InvitationActions({ invitation, onResend, onRevoke }: { invitation: Org
       </DropdownMenuTrigger>
       <DropdownMenuContent align="end" className="w-52">
         <DropdownMenuGroup>
-          <DropdownMenuItem onClick={() => onResend(invitation)}>
-            <MailPlusIcon />
-            Reenviar convite
+          <DropdownMenuItem onClick={() => onRenew(invitation)}>
+            <RefreshCwIcon />
+            Renovar convite
           </DropdownMenuItem>
         </DropdownMenuGroup>
         {invitation.status === "PENDING" && (
@@ -156,9 +148,7 @@ export function OrganizationInvitationList({
                 <RoleBadge {...invitation.assignedRole} />
               </span>
               <span className="text-muted-foreground">Convidado por {invitation.invitedByName}</span>
-              {(invitation.status === "PENDING" || invitation.status === "EXPIRED") && (
-                <Expiration invitation={invitation} labeled />
-              )}
+              <Expiration invitation={invitation} labeled />
             </div>
             <InvitationActions invitation={invitation} {...handlers} />
           </li>

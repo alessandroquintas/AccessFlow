@@ -1,8 +1,8 @@
 import type { Metadata } from "next";
-import { OrganizationPlaceholderPage } from "@/presentation/pages/organization/organization-placeholder-page";
+import { PermissionsPage } from "@/presentation/pages/permissions/permissions-page";
 
 export const metadata: Metadata = { title: "Permissões" };
 
 export default function Page() {
-  return <OrganizationPlaceholderPage title="Permissões" permissions={["permissions:manage"]} part={4} />;
+  return <PermissionsPage />;
 }

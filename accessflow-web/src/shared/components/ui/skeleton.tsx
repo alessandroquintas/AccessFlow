@@ -1,3 +1,10 @@
+/*
+ * Alterado em relação ao gerado pelo shadcn (Fase 11a, Parte 3): o
+ * `animate-pulse` virou o brilho da esquerda para a direita
+ * (`motion-safe:skeleton-shimmer motion-safe:animate-shimmer`, definidos no
+ * globals.css), parado com prefers-reduced-motion. Rodar
+ * `npx shadcn add skeleton` sobrescreve esta mudança.
+ */
 import { cn } from "cn"
 
 /**

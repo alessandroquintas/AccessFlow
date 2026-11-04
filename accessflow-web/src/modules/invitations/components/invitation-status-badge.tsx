@@ -3,17 +3,11 @@ import type { InvitationStatus } from "../schemas";
 
 export const STATUS_LABELS: Record<InvitationStatus, string> = {
   PENDING: "Pendente",
-  ACCEPTED: "Aceito",
-  DECLINED: "Recusado",
-  REVOKED: "Revogado",
   EXPIRED: "Expirado",
 };
 
 const VARIANTS = {
   PENDING: "warning",
-  ACCEPTED: "success",
-  DECLINED: "outline",
-  REVOKED: "destructive",
   EXPIRED: "outline",
 } as const;
 

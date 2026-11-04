@@ -34,16 +34,24 @@ interface MembersListProps {
   viewerIsOwner: boolean;
   /** O botão de convidar, quando o viewer pode (vem do módulo de convites). */
   inviteAction?: React.ReactNode;
+  /** Filtro de papel inicial (o link "membros com o papel" de Papéis). */
+  initialRoleId?: string | null;
 }
 
 type DialogState = { kind: "role" | "remove" | "leave"; member: Member; open: boolean } | null;
 
-export function MembersList({ organizationId, organizationName, viewerIsOwner, inviteAction }: MembersListProps) {
+export function MembersList({
+  organizationId,
+  organizationName,
+  viewerIsOwner,
+  inviteAction,
+  initialRoleId = null,
+}: MembersListProps) {
   const router = useRouter();
   const pathname = usePathname();
   const scenario = useScenario();
   const { members, viewerUserId, markRemoved, markRoleChanged } = useMembers(organizationId);
-  const [filters, setFilters] = useState<MemberFilters>({ query: "", roleId: null });
+  const [roleFilters, setFilters] = useState<MemberFilters>({ query: "", roleId: initialRoleId });
   const [visible, setVisible] = useState(PAGE_SIZE);
   const [dialog, setDialog] = useState<DialogState>(null);
 
@@ -85,13 +93,16 @@ export function MembersList({ organizationId, organizationName, viewerIsOwner, i
     setVisible(PAGE_SIZE);
   };
 
-  const filtered = filterMembers(members, filters);
-  const shown = filtered.slice(0, visible);
   const closeDialog = () => setDialog((current) => current && { ...current, open: false });
 
   return (
     <OrganizationRoles organizationId={organizationId} viewerIsOwner={viewerIsOwner}>
       {({ roles, grantBlock, can }) => {
+        // Papel do link que não existe (ou de outra organização): sem filtro.
+        const filters = roles.some(({ id }) => id === roleFilters.roleId) ? roleFilters : { ...roleFilters, roleId: null };
+        const filtered = filterMembers(members, filters);
+        const shown = filtered.slice(0, visible);
+
         const roleItems = [
           { label: "Todos os papéis", value: null },
           ...roles.map((role) => ({ label: role.name, value: role.id })),
