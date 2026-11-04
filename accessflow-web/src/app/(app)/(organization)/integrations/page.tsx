@@ -1,8 +1,8 @@
 import type { Metadata } from "next";
-import { OrganizationPlaceholderPage } from "@/presentation/pages/organization/organization-placeholder-page";
+import { IntegrationsPage } from "@/presentation/pages/integrations/integrations-page";
 
 export const metadata: Metadata = { title: "Integrações" };
 
 export default function Page() {
-  return <OrganizationPlaceholderPage title="Integrações" permissions={["integrations:read"]} part={5} />;
+  return <IntegrationsPage />;
 }

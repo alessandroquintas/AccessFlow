@@ -19,6 +19,9 @@ export const API_ERROR_MESSAGES = {
   RESERVED_PERMISSION_RESOURCE: "O recurso da chave é do sistema. Escolha outro nome para o recurso.",
   PERMISSION_KEY_TAKEN: "Já existe uma permissão com essa chave. Escolha outra chave.",
   PERMISSION_LIMIT_REACHED: "A organização atingiu o limite de permissões personalizadas. Exclua uma sem uso antes de criar outra.",
+  INTEGRATION_LIMIT_REACHED: "A organização atingiu o limite de integrações ativas ou em criação. Revogue uma que não é mais usada.",
+  INTEGRATION_PROVISIONING_FAILED: "O provedor de login não concluiu a criação. A tentativa ficou como “Falhou” e não ocupa vaga; tente de novo.",
+  INTEGRATION_NOT_ACTIVE: "Esta integração não está ativa: ainda está em criação ou já foi revogada. Atualize a lista.",
   PERMISSION_IN_USE: "Esta permissão ainda é concedida por algum papel. Tire-a dos papéis antes de excluir.",
 } as const;
 

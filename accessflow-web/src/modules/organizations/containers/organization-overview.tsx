@@ -167,7 +167,7 @@ export function OrganizationOverview({ organization }: { organization: Organizat
                                   variant="outline"
                                 />
                               )}
-                              {/* Fase 11a, Parte 5: o diálogo de criar integração abre na própria tela. */}
+                              {/* Leva à tela de integrações com o diálogo de criar aberto. */}
                               {can("roles:manage") && (
                                 <Button variant="outline" render={<Link href="/roles/new" />} nativeButton={false}>
                                   <PlusIcon data-icon="inline-start" />
@@ -175,7 +175,7 @@ export function OrganizationOverview({ organization }: { organization: Organizat
                                 </Button>
                               )}
                               {can("integrations:manage") && (
-                                <Button variant="outline" render={<Link href="/integrations" />} nativeButton={false}>
+                                <Button variant="outline" render={<Link href="/integrations?create=1" />} nativeButton={false}>
                                   <PlusIcon data-icon="inline-start" />
                                   Criar integração
                                 </Button>
