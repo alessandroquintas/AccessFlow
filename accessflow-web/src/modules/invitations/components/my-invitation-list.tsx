@@ -2,7 +2,6 @@ import { CheckIcon, MailIcon } from "lucide-react";
 import { RoleBadge } from "@/shared/components/role-badge";
 import { Button } from "@/shared/components/ui/button";
 import { Card, CardAction, CardDescription, CardFooter, CardHeader, CardTitle } from "@/shared/components/ui/card";
-import { Skeleton } from "@/shared/components/ui/skeleton";
 import { LocalDate } from "@/shared/components/local-date";
 import type { MyInvitation } from "../schemas";
 
@@ -13,9 +12,12 @@ interface MyInvitationListProps {
   renderDecline: (invitation: MyInvitation) => React.ReactNode;
 }
 
+/** O empilhamento da lista, também usado pelo skeleton. */
+export const MY_INVITATION_LIST = "flex flex-col gap-3";
+
 export function MyInvitationList({ invitations, onAccept, renderDecline }: MyInvitationListProps) {
   return (
-    <ul className="flex flex-col gap-3">
+    <ul className={MY_INVITATION_LIST}>
       {invitations.map((invitation) => (
         <li key={invitation.id}>
           <Card>
@@ -44,15 +46,5 @@ export function MyInvitationList({ invitations, onAccept, renderDecline }: MyInv
         </li>
       ))}
     </ul>
-  );
-}
-
-export function MyInvitationListSkeleton() {
-  return (
-    <div className="flex flex-col gap-3" aria-busy="true" aria-label="Carregando convites">
-      {[0, 1].map((index) => (
-        <Skeleton key={index} className="h-36 rounded-xl" />
-      ))}
-    </div>
   );
 }

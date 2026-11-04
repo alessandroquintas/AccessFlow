@@ -6,7 +6,9 @@ import { setActiveOrganization } from "@/infra/mocks/personas";
 import { setScenario, useScenario } from "@/infra/mocks/scenario";
 import { ErrorState } from "@/shared/components/feedback/error-state";
 import { Empty, EmptyContent, EmptyDescription, EmptyHeader, EmptyMedia, EmptyTitle } from "@/shared/components/ui/empty";
-import { OrganizationCardList, OrganizationCardListSkeleton } from "../components/organization-card-list";
+import { LoadingRegion } from "@/shared/components/feedback/loading-region";
+import { CardGridSkeleton } from "@/shared/components/feedback/skeletons";
+import { ORGANIZATION_GRID, OrganizationCardList } from "../components/organization-card-list";
 import { useMyOrganizations } from "../hooks/use-my-organizations";
 import { CreateOrganizationDialog } from "./create-organization-dialog";
 
@@ -15,7 +17,13 @@ export function MyOrganizations() {
   const scenario = useScenario();
   const organizations = useMyOrganizations();
 
-  if (scenario === "loading") return <OrganizationCardListSkeleton />;
+  if (scenario === "loading") {
+    return (
+      <LoadingRegion label="Carregando organizações…">
+        <CardGridSkeleton count={3} className={ORGANIZATION_GRID} />
+      </LoadingRegion>
+    );
+  }
   if (scenario === "error") return <ErrorState onRetry={() => setScenario("normal", pathname)} />;
 
   if (scenario === "empty" || organizations.length === 0) {

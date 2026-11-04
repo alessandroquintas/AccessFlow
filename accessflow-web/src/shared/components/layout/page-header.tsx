@@ -1,5 +1,6 @@
 import Link from "next/link";
 import { Fragment } from "react";
+import { PageHeaderSkeleton } from "@/shared/components/feedback/skeletons";
 import { ThemeToggle } from "@/shared/components/theme-toggle";
 import {
   Breadcrumb,
@@ -23,10 +24,14 @@ interface PageHeaderProps {
   description?: React.ReactNode;
   /** Ações da página, à direita da barra superior. */
   actions?: React.ReactNode;
+  /** Ao lado do título (ex.: o papel do viewer). */
+  meta?: React.ReactNode;
+  /** O título depende de dados ainda carregando: mostra o skeleton no lugar. */
+  loading?: boolean;
 }
 
 /** Barra superior (menu, trilha, ações, tema) e o título da página. */
-export function PageHeader({ breadcrumbs, title, description, actions }: PageHeaderProps) {
+export function PageHeader({ breadcrumbs, title, description, actions, meta, loading = false }: PageHeaderProps) {
   return (
     <>
       <header className="sticky top-0 z-10 flex h-14 shrink-0 items-center gap-2 border-b bg-background/95 px-4 backdrop-blur supports-backdrop-filter:bg-background/80">
@@ -57,10 +62,20 @@ export function PageHeader({ breadcrumbs, title, description, actions }: PageHea
           <ThemeToggle />
         </div>
       </header>
-      <div className="flex flex-col gap-1 px-4 pt-6 sm:px-6">
-        <h1 className="font-heading text-2xl font-semibold text-balance">{title}</h1>
-        {description && <p className="max-w-prose text-sm text-muted-foreground">{description}</p>}
-      </div>
+      {loading ? (
+        <>
+          <h1 className="sr-only">{title}</h1>
+          <PageHeaderSkeleton description={Boolean(description)} className="px-4 pt-6 sm:px-6" />
+        </>
+      ) : (
+        <div className="flex flex-col gap-1 px-4 pt-6 sm:px-6">
+          <div className="flex flex-wrap items-center gap-x-3 gap-y-1">
+            <h1 className="font-heading text-2xl font-semibold text-balance">{title}</h1>
+            {meta}
+          </div>
+          {description && <p className="max-w-prose text-sm text-muted-foreground">{description}</p>}
+        </div>
+      )}
     </>
   );
 }

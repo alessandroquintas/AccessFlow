@@ -1,8 +1,8 @@
 import type { Metadata } from "next";
-import { OrganizationPlaceholderPage } from "@/presentation/pages/organization/organization-placeholder-page";
+import { SettingsPage } from "@/presentation/pages/settings/settings-page";
 
 export const metadata: Metadata = { title: "Configurações" };
 
 export default function Page() {
-  return <OrganizationPlaceholderPage title="Configurações" permissions={["organizations:update"]} part={3} />;
+  return <SettingsPage />;
 }

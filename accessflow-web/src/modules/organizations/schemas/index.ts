@@ -34,6 +34,26 @@ export const organizationFormSchema = z.object({
 
 export const organizationSettingsFormSchema = organizationFormSchema.pick({ name: true });
 
+/** Contagens dos cartões da visão geral (os membros vêm de `memberCount`). */
+export const organizationSummarySchema = z.object({
+  pendingInvitations: z.number().int().nonnegative(),
+  roles: z.number().int().nonnegative(),
+  activeIntegrations: z.number().int().nonnegative(),
+});
+
+/** Uma linha de "Atividade recente": um evento da trilha de auditoria, já descrito. */
+export const activityEntrySchema = z.object({
+  id: z.string(),
+  kind: z.enum(["member", "invitation", "role", "permission", "integration", "organization"]),
+  actorName: z.string(),
+  /** O que foi feito, depois do nome de quem fez: "convidou ana.lima@… com o papel MEMBER". */
+  summary: z.string(),
+  permission: z.string().optional(),
+  occurredAt: z.iso.datetime(),
+});
+
+export type OrganizationSummary = z.infer<typeof organizationSummarySchema>;
+export type ActivityEntry = z.infer<typeof activityEntrySchema>;
 export type ViewerRole = z.infer<typeof viewerRoleSchema>;
 export type Organization = z.infer<typeof organizationSchema>;
 export type OrganizationForm = z.infer<typeof organizationFormSchema>;

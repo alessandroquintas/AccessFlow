@@ -9,7 +9,9 @@ import { ErrorState } from "@/shared/components/feedback/error-state";
 import { Button } from "@/shared/components/ui/button";
 import { Empty, EmptyContent, EmptyDescription, EmptyHeader, EmptyMedia, EmptyTitle } from "@/shared/components/ui/empty";
 import { DeclineInvitationDialog } from "../components/decline-invitation-dialog";
-import { MyInvitationList, MyInvitationListSkeleton } from "../components/my-invitation-list";
+import { LoadingRegion } from "@/shared/components/feedback/loading-region";
+import { CardGridSkeleton } from "@/shared/components/feedback/skeletons";
+import { MY_INVITATION_LIST, MyInvitationList } from "../components/my-invitation-list";
 import { useMyInvitations } from "../hooks/use-my-invitations";
 
 export function MyInvitations() {
@@ -17,7 +19,13 @@ export function MyInvitations() {
   const scenario = useScenario();
   const { invitations, markAnswered } = useMyInvitations();
 
-  if (scenario === "loading") return <MyInvitationListSkeleton />;
+  if (scenario === "loading") {
+    return (
+      <LoadingRegion label="Carregando convites…">
+        <CardGridSkeleton count={2} footer="actions" className={MY_INVITATION_LIST} />
+      </LoadingRegion>
+    );
+  }
   if (scenario === "error") return <ErrorState onRetry={() => setScenario("normal", pathname)} />;
 
   if (scenario === "empty" || invitations.length === 0) {

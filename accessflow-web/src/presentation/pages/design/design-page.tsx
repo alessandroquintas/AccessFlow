@@ -19,6 +19,15 @@ import { PermissionKeyTag } from "@/shared/components/permission-key-tag";
 import { Suspense } from "react";
 import { DevToolbar } from "@/presentation/dev/dev-toolbar";
 import { Logo } from "@/shared/components/brand/logo";
+import { LoadingRegion } from "@/shared/components/feedback/loading-region";
+import {
+  CardGridSkeleton,
+  FormSkeleton,
+  ListSkeleton,
+  PageHeaderSkeleton,
+  TableSkeleton,
+  type TableSkeletonColumn,
+} from "@/shared/components/feedback/skeletons";
 import { ThemeToggle } from "@/shared/components/theme-toggle";
 import { Alert, AlertDescription, AlertTitle } from "@/shared/components/ui/alert";
 import {
@@ -88,7 +97,6 @@ import {
   SelectValue,
 } from "@/shared/components/ui/select";
 import { Separator } from "@/shared/components/ui/separator";
-import { Skeleton } from "@/shared/components/ui/skeleton";
 import { Spinner } from "@/shared/components/ui/spinner";
 import { Switch } from "@/shared/components/ui/switch";
 import {
@@ -143,6 +151,22 @@ function RoleBadge({ role }: { role: string }) {
   if (role === "OWNER") return <Badge variant="key">OWNER</Badge>;
   if (role === "MEMBER") return <Badge variant="secondary">MEMBER</Badge>;
   return <Badge variant="outline">{role}</Badge>;
+}
+
+const SKELETON_COLUMNS: TableSkeletonColumn[] = [
+  { label: "Nome", className: "w-1/3" },
+  { label: "Papel", cell: "badge" },
+  { label: "Entrou em", cell: "date", className: "text-right" },
+  { label: "Ações", hideLabel: true, cell: "action", className: "w-12" },
+];
+
+function SkeletonSample({ label, children }: { label: string; children: React.ReactNode }) {
+  return (
+    <div className="flex flex-col gap-2">
+      <code className="font-mono text-xs text-muted-foreground">{label}</code>
+      {children}
+    </div>
+  );
 }
 
 function Section({
@@ -377,7 +401,7 @@ function ThemePanel({ theme }: { theme: "light" | "dark" }) {
         </Alert>
       </Section>
 
-      <Section title="Vazio e carregando">
+      <Section title="Vazio">
         <Empty className="border">
           <EmptyHeader>
             <EmptyMedia variant="icon">
@@ -390,11 +414,30 @@ function ThemePanel({ theme }: { theme: "light" | "dark" }) {
             <Button size="sm">Criar integração</Button>
           </EmptyContent>
         </Empty>
-        <div className="flex flex-col gap-2" aria-hidden="true">
-          <Skeleton className="h-10 w-full" />
-          <Skeleton className="h-10 w-full" />
-          <Skeleton className="h-10 w-2/3" />
-        </div>
+      </Section>
+
+      <Section
+        title="Carregamento"
+        description="Skeletons no formato da tela real, com brilho da esquerda para a direita; sem animação com movimento reduzido."
+      >
+        <LoadingRegion label="Exemplo de carregamento" className="flex flex-col gap-6">
+          <SkeletonSample label="PageHeaderSkeleton">
+            <PageHeaderSkeleton actions={1} />
+          </SkeletonSample>
+          <SkeletonSample label="TableSkeleton">
+            <TableSkeleton columns={SKELETON_COLUMNS} rows={4} />
+          </SkeletonSample>
+          <SkeletonSample label="CardGridSkeleton (resumo e detalhe)">
+            <CardGridSkeleton variant="summary" count={2} className="grid gap-4 sm:grid-cols-2" />
+            <CardGridSkeleton count={1} className="grid gap-4" />
+          </SkeletonSample>
+          <SkeletonSample label="ListSkeleton">
+            <ListSkeleton rows={3} />
+          </SkeletonSample>
+          <SkeletonSample label="FormSkeleton">
+            <FormSkeleton fields={2} />
+          </SkeletonSample>
+        </LoadingRegion>
       </Section>
 
       <Section title="Abas">

@@ -13,5 +13,14 @@ export const permissionDefinitionSchema = z.object({
   description: z.string().min(1).max(200),
 });
 
+/** Papel da organização com as permissões que concede (equivale ao `OrganizationRole`). */
+export const organizationRoleSchema = z.object({
+  id: z.string(),
+  name: z.string(),
+  kind: z.enum(["OWNER", "MEMBER", "CUSTOM"]),
+  permissions: z.array(permissionKeySchema),
+});
+
+export type OrganizationRole = z.infer<typeof organizationRoleSchema>;
 export type PermissionKey = z.infer<typeof permissionKeySchema>;
 export type PermissionDefinition = z.infer<typeof permissionDefinitionSchema>;

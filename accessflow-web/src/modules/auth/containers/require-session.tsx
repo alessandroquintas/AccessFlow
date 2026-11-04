@@ -44,7 +44,9 @@ export function RequireSession({ profile, children }: RequireSessionProps) {
   // conseguir pré-renderizar o segmento; a espera cobre a tela até lá.
   return (
     <>
-      {!ready && <FullPageStatus message="Verificando sua sessão…" />}
+      {!ready && (
+        <FullPageStatus message="Verificando sua sessão…" layout={profile === "missing" ? "card" : "app"} />
+      )}
       <div className={ready ? "contents" : "hidden"}>{children}</div>
     </>
   );

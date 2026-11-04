@@ -1,7 +1,6 @@
 import { ArrowUpRightIcon, Building2Icon } from "lucide-react";
 import Link from "next/link";
 import { Card, CardAction, CardDescription, CardFooter, CardHeader, CardTitle } from "@/shared/components/ui/card";
-import { Skeleton } from "@/shared/components/ui/skeleton";
 import { LocalDate } from "@/shared/components/local-date";
 import { pluralize } from "@/shared/lib/format";
 import type { Organization } from "../schemas";
@@ -13,9 +12,12 @@ interface OrganizationCardListProps {
   onOpen: (organization: Organization) => void;
 }
 
+/** A grade da lista, também usada pelo skeleton. */
+export const ORGANIZATION_GRID = "grid gap-4 sm:grid-cols-2 xl:grid-cols-3";
+
 export function OrganizationCardList({ organizations, onOpen }: OrganizationCardListProps) {
   return (
-    <ul className="grid gap-4 sm:grid-cols-2 xl:grid-cols-3">
+    <ul className={ORGANIZATION_GRID}>
       {organizations.map((organization) => (
         <li key={organization.id}>
           <Card className="relative h-full transition-colors has-[a:hover]:bg-accent/40 has-[a:focus-visible]:ring-2 has-[a:focus-visible]:ring-ring">
@@ -48,15 +50,5 @@ export function OrganizationCardList({ organizations, onOpen }: OrganizationCard
         </li>
       ))}
     </ul>
-  );
-}
-
-export function OrganizationCardListSkeleton() {
-  return (
-    <div className="grid gap-4 sm:grid-cols-2 xl:grid-cols-3" aria-busy="true" aria-label="Carregando organizações">
-      {[0, 1, 2].map((index) => (
-        <Skeleton key={index} className="h-32 rounded-xl" />
-      ))}
-    </div>
   );
 }

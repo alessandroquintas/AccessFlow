@@ -4,6 +4,8 @@ import { toast } from "sonner";
 import { setScenario, useScenario } from "@/infra/mocks/scenario";
 import { ErrorState } from "@/shared/components/feedback/error-state";
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/shared/components/ui/card";
+import { LoadingRegion } from "@/shared/components/feedback/loading-region";
+import { FormSkeleton } from "@/shared/components/feedback/skeletons";
 import { Skeleton } from "@/shared/components/ui/skeleton";
 import { LocalDate } from "@/shared/components/local-date";
 import { usePathname } from "next/navigation";
@@ -29,17 +31,17 @@ export function ProfileSettings() {
               Conta criada em <LocalDate iso={profile.createdAt} />.
             </>
           ) : (
-            "Carregando…"
+            <span className="flex h-5 items-center" aria-hidden="true">
+              <Skeleton className="h-3.5 w-40" />
+            </span>
           )}
         </CardDescription>
       </CardHeader>
       <CardContent>
         {scenario === "loading" || !profile ? (
-          <div className="flex flex-col gap-4" aria-busy="true">
-            <Skeleton className="h-14 w-full" />
-            <Skeleton className="h-14 w-full" />
-            <Skeleton className="h-8 w-32" />
-          </div>
+          <LoadingRegion label="Carregando perfil…">
+            <FormSkeleton fields={2} />
+          </LoadingRegion>
         ) : (
           <ProfileNameForm
             // Recomeça o formulário quando a persona muda.

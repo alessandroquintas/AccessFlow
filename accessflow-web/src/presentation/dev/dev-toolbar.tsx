@@ -9,7 +9,13 @@ import {
   sessionStore,
   setPersona,
 } from "@/infra/mocks/personas";
-import { type ScenarioMode, setScenario, useScenario } from "@/infra/mocks/scenario";
+import {
+  type ScenarioMode,
+  scenarioStore,
+  setFailActions,
+  setScenario,
+  useScenario,
+} from "@/infra/mocks/scenario";
 import { useStore } from "@/infra/mocks/use-store";
 import { Button } from "@/shared/components/ui/button";
 import {
@@ -30,6 +36,7 @@ import {
 } from "@/shared/components/ui/popover";
 import { RadioGroup, RadioGroupItem } from "@/shared/components/ui/radio-group";
 import { Separator } from "@/shared/components/ui/separator";
+import { Switch } from "@/shared/components/ui/switch";
 import { ToggleGroup, ToggleGroupItem } from "@/shared/components/ui/toggle-group";
 
 const SCENARIOS: { value: ScenarioMode; label: string }[] = [
@@ -37,11 +44,13 @@ const SCENARIOS: { value: ScenarioMode; label: string }[] = [
   { value: "loading", label: "Carregando" },
   { value: "empty", label: "Vazio" },
   { value: "error", label: "Erro" },
+  { value: "forbidden", label: "Sem permissão" },
 ];
 
 /**
- * Ferramenta de design (só fora de produção): troca a persona e força um
- * estado (carregando, vazio, erro) na tela atual.
+ * Ferramenta de design (só fora de produção): troca a persona, força um
+ * estado (carregando, vazio, erro, sem permissão) na tela atual e faz as
+ * ações receberem um erro da API.
  */
 interface DevToolbarProps {
   /**
@@ -55,6 +64,7 @@ export function DevToolbar({ variant = "floating" }: DevToolbarProps) {
   const pathname = usePathname();
   const { personaId } = useStore(sessionStore);
   const currentScenario = useScenario();
+  const { failActions } = useStore(scenarioStore);
   const persona = getPersona(personaId);
 
   return (
@@ -111,7 +121,8 @@ export function DevToolbar({ variant = "floating" }: DevToolbarProps) {
             aria-labelledby="scenario-label"
             variant="outline"
             size="sm"
-            spacing={0}
+            spacing={1}
+            className="flex-wrap"
             value={[currentScenario]}
             onValueChange={(value) =>
               setScenario((value[0] as ScenarioMode | undefined) ?? "normal", pathname)
@@ -125,6 +136,14 @@ export function DevToolbar({ variant = "floating" }: DevToolbarProps) {
           </ToggleGroup>
           <FieldDescription>Vale só para {pathname}.</FieldDescription>
         </FieldSet>
+
+        <Field orientation="horizontal">
+          <FieldContent>
+            <FieldLabel htmlFor="fail-actions">Simular erro da API nas ações</FieldLabel>
+            <FieldDescription>Convidar, remover, trocar papel… mostram o erro traduzido.</FieldDescription>
+          </FieldContent>
+          <Switch id="fail-actions" checked={failActions} onCheckedChange={setFailActions} />
+        </Field>
 
       </PopoverContent>
     </Popover>

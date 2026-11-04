@@ -1,11 +1,18 @@
-import { Spinner } from "@/shared/components/ui/spinner";
+import { LoadingRegion } from "@/shared/components/feedback/loading-region";
+import { AppShellSkeleton, CenteredCardSkeleton } from "@/shared/components/feedback/skeletons";
 
-/** Tela inteira de espera: callback de login e checagem de sessão. */
-export function FullPageStatus({ message }: { message: string }) {
+interface FullPageStatusProps {
+  /** Lido pelos leitores de tela. */
+  message: string;
+  /** app: a casca do painel; card: o cartão centralizado do onboarding. */
+  layout?: "app" | "card";
+}
+
+/** Tela inteira de espera (callback de login e checagem de sessão), no formato da tela que vem. */
+export function FullPageStatus({ message, layout = "app" }: FullPageStatusProps) {
   return (
-    <div role="status" className="flex min-h-svh flex-1 flex-col items-center justify-center gap-3 p-6 text-sm text-muted-foreground">
-      <Spinner className="size-5" aria-hidden="true" />
-      <p>{message}</p>
-    </div>
+    <LoadingRegion label={message} className="flex min-h-svh flex-1">
+      {layout === "app" ? <AppShellSkeleton /> : <CenteredCardSkeleton />}
+    </LoadingRegion>
   );
 }
