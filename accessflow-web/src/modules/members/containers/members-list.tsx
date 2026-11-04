@@ -146,8 +146,10 @@ export function MembersList({
                 </InputGroupAddon>
                 <InputGroupInput
                   type="search"
+                  name="member-search"
+                  autoComplete="off"
                   aria-label="Buscar por nome ou e-mail"
-                  placeholder="Buscar por nome ou e-mail"
+                  placeholder="Buscar por nome ou e-mail…"
                   value={filters.query}
                   onChange={(event) => changeFilters({ query: event.target.value })}
                 />

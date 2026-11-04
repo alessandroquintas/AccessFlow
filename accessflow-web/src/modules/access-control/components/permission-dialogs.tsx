@@ -47,7 +47,7 @@ function DescriptionField({
         {...field}
         id={id}
         rows={3}
-        placeholder="Ex.: Aprovar faturas de fornecedores"
+        placeholder="Ex.: Aprovar faturas de fornecedores…"
         aria-invalid={Boolean(error)}
         aria-describedby={`${id}-count${error ? ` ${id}-error` : ""}`}
       />

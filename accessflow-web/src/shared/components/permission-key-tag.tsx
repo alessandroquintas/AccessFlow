@@ -16,7 +16,7 @@ export function PermissionKeyTag({
   const action = separator === -1 ? "" : value.slice(separator + 1);
 
   return (
-    <code
+    <code translate="no"
       data-slot="permission-key"
       className={cn(
         "inline-flex max-w-full items-baseline rounded-sm border border-border bg-muted px-1.5 py-0.5 font-mono text-xs leading-none break-all",

@@ -34,7 +34,7 @@ export function ErrorState({
         <EmptyDescription>{description}</EmptyDescription>
         {requestId && (
           <EmptyDescription>
-            Código para o suporte: <code className="font-mono">{requestId}</code>
+            Código para o suporte: <code translate="no" className="font-mono">{requestId}</code>
           </EmptyDescription>
         )}
       </EmptyHeader>

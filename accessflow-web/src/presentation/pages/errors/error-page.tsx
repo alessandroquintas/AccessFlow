@@ -39,7 +39,7 @@ export function ErrorPage({ error, retry }: ErrorPageProps) {
           </EmptyDescription>
           {digest && (
             <EmptyDescription>
-              Código para o suporte: <code className="font-mono select-all">{digest}</code>
+              Código para o suporte: <code translate="no" className="font-mono select-all">{digest}</code>
             </EmptyDescription>
           )}
         </EmptyHeader>

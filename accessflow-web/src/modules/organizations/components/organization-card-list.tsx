@@ -33,7 +33,7 @@ export function OrganizationCardList({ organizations, onOpen }: OrganizationCard
                 </Link>
               </CardTitle>
               <CardDescription>
-                <code className="font-mono text-xs">{organization.slug}</code>
+                <code translate="no" className="font-mono text-xs">{organization.slug}</code>
               </CardDescription>
               <CardAction>
                 <RoleBadge {...organization.viewerRole} />

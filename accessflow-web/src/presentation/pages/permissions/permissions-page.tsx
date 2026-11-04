@@ -15,7 +15,7 @@ export function PermissionsPage() {
             title="Permissões"
             description={
               <>
-                As chaves <code className="font-mono text-xs">recurso:ação</code> que os papéis concedem e as integrações
+                As chaves <code translate="no" className="font-mono text-xs">recurso:ação</code> que os papéis concedem e as integrações
                 consultam.
               </>
             }

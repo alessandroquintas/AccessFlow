@@ -196,7 +196,7 @@ function RoleEditorForm({
                         {...field}
                         id="role-name"
                         readOnly={nameLocked}
-                        placeholder="Ex.: Financeiro"
+                        placeholder="Ex.: Financeiro…"
                         autoComplete="off"
                         aria-invalid={fieldState.invalid}
                         aria-describedby={fieldState.error ? "role-name-error" : "role-name-hint"}

@@ -15,6 +15,7 @@ import { useStore } from "@/infra/mocks/use-store";
 import { Can } from "@/modules/access-control/containers/can";
 import { RequirePermission } from "@/modules/access-control/containers/require-permission";
 import { ViewerPermissions } from "@/modules/access-control/containers/viewer-permissions";
+import { ScopeChecklistSample } from "@/modules/integrations/containers/scope-checklist-sample";
 import { PermissionKeyTag } from "@/shared/components/permission-key-tag";
 import { Suspense } from "react";
 import { DevToolbar } from "@/presentation/dev/dev-toolbar";
@@ -163,7 +164,7 @@ const SKELETON_COLUMNS: TableSkeletonColumn[] = [
 function SkeletonSample({ label, children }: { label: string; children: React.ReactNode }) {
   return (
     <div className="flex flex-col gap-2">
-      <code className="font-mono text-xs text-muted-foreground">{label}</code>
+      <code translate="no" className="font-mono text-xs text-muted-foreground">{label}</code>
       {children}
     </div>
   );
@@ -213,7 +214,7 @@ function ThemePanel({ theme }: { theme: "light" | "dark" }) {
                 style={{ background: `var(--${token})` }}
               />
               <span className="flex min-w-0 flex-col">
-                <code className="truncate font-mono text-xs">{token}</code>
+                <code translate="no" className="truncate font-mono text-xs">{token}</code>
                 <span className="truncate text-xs text-muted-foreground">{role}</span>
               </span>
             </li>
@@ -239,9 +240,9 @@ function ThemePanel({ theme }: { theme: "light" | "dark" }) {
           <p className="text-sm">Corpo do painel, em 14 px: tabelas, campos e menus.</p>
           <p className="text-xs font-medium text-muted-foreground">Cabeçalho de tabela e metadados</p>
           <p className="flex flex-wrap items-center gap-2 text-sm">
-            <code className="font-mono text-xs">4f1c9a2e7b</code>
-            <code className="font-mono text-xs">accessflow-api/members.read</code>
-            <code className="font-mono text-xs">vale-verde</code>
+            <code translate="no" className="font-mono text-xs">4f1c9a2e7b</code>
+            <code translate="no" className="font-mono text-xs">accessflow-api/members.read</code>
+            <code translate="no" className="font-mono text-xs">vale-verde</code>
           </p>
         </div>
       </Section>
@@ -253,6 +254,16 @@ function ThemePanel({ theme }: { theme: "light" | "dark" }) {
           <PermissionKeyTag value="audit:read" />
           <PermissionKeyTag value="faturas:aprovar" />
         </div>
+      </Section>
+
+      <Section
+        title="Escopos de integração"
+        description="Quem cria sem roles:read não pode conceder o authorize: cadeado e o motivo."
+      >
+        <FieldSet>
+          <FieldLegend variant="label">Escopos</FieldLegend>
+          <ScopeChecklistSample viewerPermissions={["members:read"]} />
+        </FieldSet>
       </Section>
 
       <Section title="Botões">
@@ -609,7 +620,7 @@ export function DesignPage() {
           <h1 className="font-heading text-2xl font-semibold">Direção visual</h1>
           <p className="max-w-prose text-sm text-muted-foreground">
             Tokens, tipografia e componentes base nos dois temas. A justificativa de cada escolha está em{" "}
-            <code className="font-mono text-xs">docs/design-direction.md</code>. Esta página não existe em produção.
+            <code translate="no" className="font-mono text-xs">docs/design-direction.md</code>. Esta página não existe em produção.
           </p>
         </div>
         <ThemeToggle />

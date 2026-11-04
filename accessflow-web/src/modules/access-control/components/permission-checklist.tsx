@@ -54,8 +54,10 @@ export function PermissionChecklist({ catalog, selected, lockOf, onChange }: Per
         </InputGroupAddon>
         <InputGroupInput
           type="search"
+          name="permission-search"
+          autoComplete="off"
           aria-label="Buscar permissão por chave ou descrição"
-          placeholder="Buscar por chave ou descrição"
+          placeholder="Buscar por chave ou descrição…"
           value={query}
           onChange={(event) => setQuery(event.target.value)}
         />
@@ -80,8 +82,8 @@ export function PermissionChecklist({ catalog, selected, lockOf, onChange }: Per
           <FieldSet key={group.resource} className="gap-3">
             <div className="flex flex-wrap items-center justify-between gap-2">
               <FieldLegend variant="label" className="mb-0 flex items-center gap-2">
-                {RESOURCE_LABELS[group.resource] ?? <code className="font-mono">{group.resource}</code>}
-                {group.system && <code className="font-mono text-xs font-normal text-muted-foreground">{group.resource}</code>}
+                {RESOURCE_LABELS[group.resource] ?? <code translate="no" className="font-mono">{group.resource}</code>}
+                {group.system && <code translate="no" className="font-mono text-xs font-normal text-muted-foreground">{group.resource}</code>}
                 <span className="text-xs font-normal text-muted-foreground tabular-nums">
                   {count} de {keys.length}
                 </span>
