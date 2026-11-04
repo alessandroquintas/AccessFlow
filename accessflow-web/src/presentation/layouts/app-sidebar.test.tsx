@@ -51,7 +51,7 @@ describe("menu da organização ativa", () => {
     setPersona("custom");
     renderSidebar();
 
-    expect(organizationMenu()).toEqual(["Visão geral", "Membros", "Papéis", "Integrações", "Auditoria"]);
+    expect(organizationMenu()).toEqual(["Visão geral", "Membros", "Papéis", "Permissões", "Integrações", "Auditoria"]);
   });
 });
 

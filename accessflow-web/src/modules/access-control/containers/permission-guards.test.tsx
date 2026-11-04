@@ -13,8 +13,8 @@ function Page() {
       <Can organizationId={VALE_VERDE} permissions={["members:invite"]}>
         <button type="button">Convidar membro</button>
       </Can>
-      <RequirePermission organizationId={VALE_VERDE} permissions={["roles:manage"]}>
-        <h1>Editor de papéis</h1>
+      <RequirePermission organizationId={VALE_VERDE} permissions={["permissions:manage"]}>
+        <h1>Permissões personalizadas</h1>
       </RequirePermission>
     </>
   );
@@ -24,7 +24,7 @@ describe("guards de permissão", () => {
   it("OWNER vê a ação e a página", () => {
     renderWithProviders(<Page />);
 
-    expect(screen.getByRole("heading", { name: "Editor de papéis" })).toBeInTheDocument();
+    expect(screen.getByRole("heading", { name: "Permissões personalizadas" })).toBeInTheDocument();
     expect(screen.getByRole("button", { name: "Convidar membro" })).toBeInTheDocument();
   });
 
@@ -34,7 +34,7 @@ describe("guards de permissão", () => {
 
     expect(screen.getByRole("button", { name: "Convidar membro" })).toBeInTheDocument();
     expect(screen.getByText("Você não tem permissão para ver isto")).toBeInTheDocument();
-    expect(screen.queryByRole("heading", { name: "Editor de papéis" })).not.toBeInTheDocument();
+    expect(screen.queryByRole("heading", { name: "Permissões personalizadas" })).not.toBeInTheDocument();
   });
 
   it("MEMBER não vê a ação", () => {
