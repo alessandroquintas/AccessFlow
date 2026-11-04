@@ -38,6 +38,6 @@ describe("seletor de persona", () => {
     await user.click(screen.getByRole("button", { name: /Persona/ }));
     await user.click(await screen.findByRole("button", { name: "Erro" }));
 
-    expect(scenarioStore.get()).toEqual({ mode: "error", pathname: "/members" });
+    expect(scenarioStore.get()).toEqual({ mode: "error", pathname: "/members", failActions: false });
   });
 });
