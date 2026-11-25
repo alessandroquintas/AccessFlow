@@ -49,6 +49,7 @@ const eslintConfig = defineConfig([
           ],
         },
       ],
+      "@typescript-eslint/no-namespace": "off",
     },
   },
   // Override default ignores of eslint-config-next.
