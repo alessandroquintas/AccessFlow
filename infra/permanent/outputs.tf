@@ -3,34 +3,42 @@ locals {
 }
 
 output "user_pool_id" {
-  value = aws_cognito_user_pool.main.id
+  description = "ID do user pool do Cognito."
+  value       = aws_cognito_user_pool.main.id
 }
 
 output "issuer" {
-  value = "https://cognito-idp.${var.aws_region}.amazonaws.com/${aws_cognito_user_pool.main.id}"
+  description = "Emissor (iss) dos tokens do user pool."
+  value       = "https://cognito-idp.${var.aws_region}.amazonaws.com/${aws_cognito_user_pool.main.id}"
 }
 
 output "web_client_id" {
-  value = aws_cognito_user_pool_client.web.id
+  description = "ID do app client público do front-end."
+  value       = aws_cognito_user_pool_client.web.id
 }
 
 output "dev_cli_client_id" {
-  value = one(aws_cognito_user_pool_client.dev_cli[*].id)
+  description = "ID do app client de desenvolvimento para a AWS CLI; nulo quando desligado."
+  value       = one(aws_cognito_user_pool_client.dev_cli[*].id)
 }
 
 output "hosted_ui_domain" {
-  value = local.hosted_ui_domain
+  description = "URL base do login hospedado do Cognito."
+  value       = local.hosted_ui_domain
 }
 
 output "integration_client_id" {
-  value = aws_cognito_user_pool_client.integration_demo.id
+  description = "ID do app client de máquina de demonstração."
+  value       = aws_cognito_user_pool_client.integration_demo.id
 }
 
 output "integration_client_secret" {
-  value     = aws_cognito_user_pool_client.integration_demo.client_secret
-  sensitive = true
+  description = "Segredo do app client de máquina de demonstração."
+  value       = aws_cognito_user_pool_client.integration_demo.client_secret
+  sensitive   = true
 }
 
 output "token_endpoint" {
-  value = "${local.hosted_ui_domain}/oauth2/token"
+  description = "Endpoint OAuth2 onde as integrações obtêm tokens."
+  value       = "${local.hosted_ui_domain}/oauth2/token"
 }

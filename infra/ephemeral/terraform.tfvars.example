@@ -1,0 +1,2 @@
+environment  = "prod"
+state_bucket = "accessflow-tfstate-SEU_ACCOUNT_ID"

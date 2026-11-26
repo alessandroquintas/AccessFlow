@@ -1,0 +1,1 @@
+# Segredos no Secrets Manager.

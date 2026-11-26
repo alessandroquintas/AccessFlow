@@ -1,7 +1,7 @@
 variable "aws_region" {
   type        = string
   default     = "us-east-1"
-  description = "Servidor na Virginia"
+  description = "Região da AWS onde o Cognito é criado."
 }
 
 variable "domain_prefix" {
@@ -20,13 +20,15 @@ variable "domain_prefix" {
 }
 
 variable "web_callback_urls" {
-  type    = list(string)
-  default = ["http://localhost:3000/api/auth/callback"]
+  type        = list(string)
+  default     = ["http://localhost:3000/api/auth/callback"]
+  description = "URLs para onde o login hospedado pode redirecionar o client web depois de autenticar."
 }
 
 variable "web_logout_urls" {
-  type    = list(string)
-  default = ["http://localhost:3000"]
+  type        = list(string)
+  default     = ["http://localhost:3000"]
+  description = "URLs para onde o login hospedado pode redirecionar o client web depois do logout."
 }
 
 variable "enable_dev_cli_client" {

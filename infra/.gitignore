@@ -1,8 +1,25 @@
+# Diretório de trabalho do Terraform
 .terraform/
+
+# State
 *.tfstate
 *.tfstate.*
+
+# Planos salvos (podem conter segredos)
+tfplan*
+*.tfplan
+
+# Variáveis e backend com valores reais; só os *.example são versionados
 *.tfvars
-!*.tfvars.example
+terraform.tfvars
+*.auto.tfvars
 backend.hcl
+!*.tfvars.example
+
+# Logs de falha
 crash.log
-tfplan
+crash.*.log
+
+# Overrides locais
+override.tf
+*_override.tf
