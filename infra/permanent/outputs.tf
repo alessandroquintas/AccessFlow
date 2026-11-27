@@ -42,3 +42,13 @@ output "token_endpoint" {
   description = "Endpoint OAuth2 onde as integrações obtêm tokens."
   value       = "${local.hosted_ui_domain}/oauth2/token"
 }
+
+output "ecr_repository_urls" {
+  description = "URL de cada repositório do ECR, usada no docker push e nas task definitions."
+  value       = { for name, repo in aws_ecr_repository.app : name => repo.repository_url }
+}
+
+output "user_pool_arn" {
+  description = "ARN do user pool, usado para restringir as permissões da task role da API."
+  value       = aws_cognito_user_pool.main.arn
+}
